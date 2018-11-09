@@ -156,8 +156,8 @@ class BollBandsStrategy(CtaTemplate):
         self.bg15Dict[symbol].updateBar(bar)
 
 
-        self.buy(symbol,bar.close*1.01, 1,priceType = PRICETYPE_LIMITPRICE, levelRate = 10)   
-        self.short(symbol,bar.close*1.01, 1,priceType = PRICETYPE_LIMITPRICE, levelRate = 10)
+        self.buy(symbol,bar.close*1.01, 1,priceType = PRICETYPE_LIMITPRICE)   
+        self.short(symbol,bar.close*1.01, 1,priceType = PRICETYPE_LIMITPRICE)
         if self.posDict[symbol+"_LONG"] == 0 and self.posDict[symbol+"_SHORT"] == 0:
             self.intraTradeHighDict[symbol] = 0
             self.intraTradeLowDict[symbol] = 999999

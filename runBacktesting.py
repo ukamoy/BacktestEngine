@@ -15,11 +15,11 @@ if __name__ == '__main__':
     # 设置引擎的回测模式为K线
     engine.setBacktestingMode(engine.BAR_MODE)
     # 设置使用的历史数据库
-    engine.setDatabase(MINUTE_DB_NAME)
+    engine.setDatabase('test_database')
 
     # 设置回测用的数据起始日期，initHours 默认值为 0
-    engine.setStartDate('20180806 06:00',initHours=1)   
-    engine.setEndDate('20180813 08:00')
+    engine.setStartDate('20110101 06:00')   
+    engine.setEndDate('20110530 08:00')
     # 设置产品相关参数
     engine.setCapital(1000000)  # 设置起始资金，默认值是1,000,000
     engine.setSlippage(0.01)     # 股指1跳
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     engine.setCachePath("D:\\backtest_data\\") # 设置本地数据缓存的路径，默认存在用户文件夹内
     
     # 在引擎中创建策略对象
-    d = {'symbolList':['AP:CZC']}
+    d = {'symbolList':['AL']}
     engine.initStrategy(BollBandsStrategy, d)
     
     # 开始跑回测
