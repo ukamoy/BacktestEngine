@@ -454,21 +454,30 @@ class BarGenerator(object):
         self.xSecond = xSecond
         self.lastSecond = 0
 
+        self.onCandle = onBar
+        self.Candle = None
+
+        self.onWCandle = onBar
+        self.WeekCandle = None
+        self.onMCandle = onBar
+        self.MonthCandle = None
+
         self.lastTick = None  # 上一TICK缓存对象
+        self.intraDay = None
+        self.intraWeek = 0
+        self.intraMonth = 0
 
     # ----------------------------------------------------------------------
     def updateTick(self, tick):
         """TICK更新"""
         newMinute = False  # 默认不是新的一分钟
-        newHfBar = False  # 默认不是新的hf
 
         # 尚未创建对象
         if not self.bar:
             self.bar = VtBarData()
             # 生成上一分钟K线的时间戳
-            self.bar.datetime = tick.datetime.replace(second=0, microsecond=0)  # 将秒和微秒设为0
-            self.bar.date = self.bar.datetime.strftime('%Y%m%d')
-            self.bar.time = self.bar.datetime.strftime('%H:%M:%S.%f')
+            #self.bar.datetime = tick.datetime.replace(second=0, microsecond=0)  # 将秒和微秒设为0
+            
             newMinute = True
 
         # 新的一分钟
@@ -490,6 +499,8 @@ class BarGenerator(object):
             self.bar.high = tick.lastPrice
             self.bar.low = tick.lastPrice
             self.bar.datetime = tick.datetime.replace(second=0, microsecond=0)  # 将秒和微秒设为0
+            self.bar.date = self.bar.datetime.strftime('%Y%m%d')
+            self.bar.time = self.bar.datetime.strftime('%H:%M:%S.%f')
         # 累加更新老一分钟的K线数据
         else:
             self.bar.high = max(self.bar.high, tick.lastPrice)
@@ -497,7 +508,7 @@ class BarGenerator(object):
 
         # 通用更新部分
         self.bar.close = tick.lastPrice
-        self.bar.open_interest = tick.open_interest
+        self.bar.openInterest = tick.openInterest
 
         if tick.exchange in ['OKEX']:
             if tick.volumeChange:
@@ -507,30 +518,14 @@ class BarGenerator(object):
                 self.bar.volume += (tick.volume - self.lastTick.volume)  # 当前K线内的成交量（原版VNPY）
             # 缓存Tick
             self.lastTick = tick
-        
+
+    #--------------------------------------------        
+    def updateHFBar(self,tick):
         # 高频交易的bar
         if self.xSecond:
             if not self.hfBar:
                 self.hfBar = VtBarData()
-                # 生成上一分钟K线的时间戳
-                self.hfBar.datetime = tick.datetime.replace(second=0, microsecond=0)  # 将秒和微秒设为0
-                self.hfBar.date = self.bar.datetime.strftime('%Y%m%d')
-                self.hfBar.time = self.bar.datetime.strftime('%H:%M:%S.%f')
-                newHfBar = True
-
-            # 新的一分钟
-            elif not (self.hfBar.datetime.second) % self.xSecond:
-                if (self.hfBar.datetime.second != self.lastSecond) and tick.datetime.second > 10:
-                    # 推送已经结束的上一分钟K线
-                    self.onHFBar(self.hfBar)
-                    self.lastSecond = self.hfBar.datetime.second
-
-                    # 创建新的K线对象
-                    self.hfBar = VtBarData()
-                    newHfBar = True
-                
-                # 初始化新一分钟的K线数据
-            if newHfBar:
+                # 生成上一K线的时间戳
                 self.hfBar.vtSymbol = tick.vtSymbol
                 self.hfBar.symbol = tick.symbol
                 self.hfBar.exchange = tick.exchange
@@ -538,30 +533,40 @@ class BarGenerator(object):
                 self.hfBar.open = tick.lastPrice
                 self.hfBar.high = tick.lastPrice
                 self.hfBar.low = tick.lastPrice
-                self.hfBar.datetime = tick.datetime.replace(microsecond=0)  # 将微秒设为0
-
-            # 累加更新老一分钟的K线数据
-            else:
-                self.hfBar.high = max(self.hfBar.high, tick.lastPrice)
-                self.hfBar.low = min(self.hfBar.low, tick.lastPrice)
-
+                                
+            # 累加更新老K线数据
+            self.hfBar.high = max(self.hfBar.high, tick.lastPrice)
+            self.hfBar.low = min(self.hfBar.low, tick.lastPrice)
+            
+            self.hfBar.datetime = tick.datetime.replace(microsecond=0)  # 将微秒设为0
+            self.hfBar.date = self.hfBar.datetime.strftime('%Y%m%d')
+            self.hfBar.time = self.hfBar.datetime.strftime('%H:%M:%S.%f')
+            
             # 通用更新部分
             self.hfBar.close = tick.lastPrice
-            self.hfBar.open_interest = tick.open_interest
-
+            self.hfBar.openInterest = tick.openInterest
             if tick.exchange in ['OKEX']:
                 if tick.volumeChange:
-                    self.bar.volume += tick.lastVolume
+                    self.hfBar.volume += tick.lastVolume
             else:
                 if self.lastTick:
-                    self.bar.volume += (tick.volume - self.lastTick.volume)  # 当前K线内的成交量（原版VNPY）
+                    self.hfBar.volume += (tick.volume - self.lastTick.volume)  # 当前K线内的成交量（原版VNPY）
                 # 缓存Tick
                 self.lastTick = tick
+            
+            # 新的一K
+            if not (tick.datetime.second) % self.xSecond:
+                if self.lastSecond != tick.datetime.second:
+                    # 推送已经结束的上一K线
+                    self.onHFBar(self.hfBar)
+                    self.lastSecond = tick.datetime.second
+                    self.hfBar = None
+
     # ----------------------------------------------------------------------
     def updateBar(self, bar):
         """1分钟K线更新"""
         # 尚未创建对象
-        if not self.xminBar:
+        if not self.Kline:
             self.xminBar = VtBarData()
 
             self.xminBar.vtSymbol = bar.vtSymbol
@@ -584,7 +589,7 @@ class BarGenerator(object):
         # 通用部分
         self.xminBar.close = bar.close
         # self.xminBar.datetime = bar.datetime
-        self.xminBar.open_interest = bar.open_interest
+        self.xminBar.openInterest = bar.openInterest
         self.xminBar.volume += int(bar.volume)
         
         # X分钟已经走完
@@ -601,6 +606,121 @@ class BarGenerator(object):
                 self.xminBar = None
 
     #----------------------------------------------------------------------
+    def updateCandle(self, bar):
+        """日K线更新"""
+        # 尚未创建对象
+        if time(bar.datetime.hour,bar.datetime.minute) > time(19,00):
+            self.intraDay = bar.datetime+timedelta(hours=5)
+            if self.intraDay.weekday() =6:
+                self.intraDay = self.intraDay+timedelta(days=2)
+
+        if not self.Candle:
+            self.Candle = VtBarData()
+
+            self.Candle.vtSymbol = bar.vtSymbol
+            self.Candle.symbol = bar.symbol
+            self.Candle.exchange = bar.exchange
+
+            self.Candle.open = bar.open
+            self.Candle.high = bar.high
+            self.Candle.low = bar.low
+            # 生成上一X分钟K线的时间戳
+            self.Candle.datetime = bar.datetime.replace(second=0, microsecond=0)  # 将秒和微秒设为0
+            self.Candle.date = bar.datetime.strftime('%Y%m%d')
+            self.Candle.time = bar.datetime.strftime('%H:%M:%S.%f')
+
+            # 累加老K线
+        else:
+            self.Candle.high = max(self.Candle.high, bar.high)
+            self.Candle.low = min(self.Candle.low, bar.low)
+        
+        # 通用部分
+        self.Candle.close = bar.close
+        self.Candle.openInterest = bar.openInterest
+        self.Candle.volume += int(bar.volume)
+
+        if self.intraDay.date()!=bar.datime.date():
+            # 推送
+            self.onCandle(self.Candle)
+            # 清空老K线缓存对象
+            self.Candle = None
+    def updateWCandle(self, Candle):
+        """周K线更新"""
+        # 尚未创建对象
+        a = int(Candle.datetime.now().strftime('%Y%m%d'))
+        b = int(a/7)
+
+        if b != self.intraWeek:
+            # 推送
+            if self.WeekCandle:
+                self.onWCandle(self.WeekCandle)
+                # 清空老K线缓存对象
+                self.WeekCandle = None
+
+        if not self.WeekCandle:
+            self.WeekCandle = VtBarData()
+
+            self.WeekCandle.vtSymbol = Candle.vtSymbol
+            self.WeekCandle.symbol = Candle.symbol
+            self.WeekCandle.exchange = Candle.exchange
+
+            self.WeekCandle.open = Candle.open
+            self.WeekCandle.high = Candle.high
+            self.WeekCandle.low = Candle.low
+            # 生成上一X分钟K线的时间戳
+            self.WeekCandle.datetime = Candle.datetime.replace(second=0, microsecond=0)  # 将秒和微秒设为0
+            self.WeekCandle.date = Candle.datetime.strftime('%Y%m%d')
+            self.WeekCandle.time = Candle.datetime.strftime('%H:%M:%S.%f')
+
+            # 累加老K线
+        else:
+            self.WeekCandle.high = max(self.WeekCandle.high, Candle.high)
+            self.WeekCandle.low = min(self.WeekCandle.low, Candle.low)
+        
+        # 通用部分
+        self.WeekCandle.close = Candle.close
+        self.WeekCandle.openInterest = Candle.openInterest
+        self.WeekCandle.volume += int(Candle.volume)
+        self.intraWeek = b
+    def updateMCandle(self, Candle):
+        """月K线更新"""
+        # 尚未创建对象
+        a=int(datetime.now().strftime('%m'))
+
+        if a != self.intraMonth:
+            # 推送
+            if self.MonthCandle:
+                self.onMCandle(self.MonthCandle)
+                # 清空老K线缓存对象
+                self.MonthCandle = None
+
+        if not self.MonthCandle:
+            self.MonthCandle = VtBarData()
+
+            self.MonthCandle.vtSymbol = Candle.vtSymbol
+            self.MonthCandle.symbol = Candle.symbol
+            self.MonthCandle.exchange = Candle.exchange
+
+            self.MonthCandle.open = Candle.open
+            self.MonthCandle.high = Candle.high
+            self.MonthCandle.low = Candle.low
+            # 生成上一X分钟K线的时间戳
+            self.MonthCandle.datetime = Candle.datetime.replace(second=0, microsecond=0)  # 将秒和微秒设为0
+            self.MonthCandle.date = Candle.datetime.strftime('%Y%m%d')
+            self.MonthCandle.time = Candle.datetime.strftime('%H:%M:%S.%f')
+
+            # 累加老K线
+        else:
+            self.MonthCandle.high = max(self.MonthCandle.high, Candle.high)
+            self.MonthCandle.low = min(self.MonthCandle.low, Candle.low)
+        
+        # 通用部分
+        self.MonthCandle.close = Candle.close
+        self.MonthCandle.openInterest = Candle.openInterest
+        self.MonthCandle.volume += int(Candle.volume)
+        self.intraMonth = a
+
+    #--------------------------            
     def generate(self):
         """手动强制立即完成K线合成"""
         self.onBar(self.bar)

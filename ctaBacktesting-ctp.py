@@ -512,7 +512,6 @@ class BacktestingEngine(object):
                                     del df[k]
                     
 
-
                     data = pd.concat(
                         [data, df[maincontract][(df[maincontract].datetime > i) & (df[maincontract].datetime <= day)]])
 
