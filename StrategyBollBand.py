@@ -63,7 +63,7 @@ class BollBandsStrategy(CtaTemplate):
         #       用于生成 on5MinBar 需要的 Bar 和计算指标信号用的 bar array，可在 on5MinBar() 获取到
         self.generateBarDict(self.onBar)  
         self.generateBarDict(self.onBar,15,self.on15MinBar,size =self.slowWindow*3)
-        self.generateBarDict(self.onBar,60,self.on60MinBar,size =self.slowWindow*3)
+        self.generateBarDict(self.onBar,60,self.on60MinBar,size =self.slowWindow*3,alignment = 'full')
 
         # 对于高频交易员，提供秒级别的 Bar，或者可当作秒级计数器，参数为秒，可在 onHFBar() 获取
         self.generateHFBar(10)
