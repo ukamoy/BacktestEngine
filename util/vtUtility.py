@@ -3,7 +3,7 @@
 import numpy as np
 import talib
 import pandas as  pd
-from datetime import time,timedelta
+from datetime import datetime, time, timedelta
 
 from vnpy.trader.vtObject import VtBarData
 class BarGenerator(object):
@@ -37,7 +37,6 @@ class BarGenerator(object):
         self.MonthCandle = None
 
         self.lastTick = None  # 上一TICK缓存对象
-        self.intraDay = None
         self.intraWeek = 0
         self.intraMonth = 0
         self.runningTime = runningTime
@@ -119,7 +118,7 @@ class BarGenerator(object):
     # ----------------------------------------------------------------------
     def updateBar(self, bar):
         """多分钟K线更新"""
-        if self.alignment = 'full':
+        if self.alignment == 'full':
         
             # 尚未创建对象
             if not self.xminBar:
@@ -141,14 +140,14 @@ class BarGenerator(object):
             self.xminBar.low = min(self.xminBar.low, bar.low)
             self.xminBar.close = bar.close
             self.xminBar.openInterest = bar.openInterest
-            self.xminBar.volume += int(bar.volume)
+            self.xminBar.volume += bar.volume
             self.BarDone+=1
 
             if self.BarDone == self.xmin:
                 self.onXminBar(self.xminBar)
                 self.xminBar = None
 
-        if self.alignment = 'sharp':
+        elif self.alignment == 'sharp':
             # X分钟已经走完
             if self.xminBar and self.BarDone:
                 if  bar.datetime > self.BarDone:
@@ -183,7 +182,7 @@ class BarGenerator(object):
             self.xminBar.low = min(self.xminBar.low, bar.low)
             self.xminBar.close = bar.close
             self.xminBar.openInterest = bar.openInterest
-            self.xminBar.volume += int(bar.volume)
+            self.xminBar.volume += bar.volume
         
         if (bar.datetime.hour, bar.datetime.minute) == self.runningTime:   # 强制收盘切断
             self.onXminBar(self.xminBar)
@@ -193,21 +192,6 @@ class BarGenerator(object):
     def updateCandle(self, bar):
         """日K线更新"""
         # 尚未创建对象
-        if self.runningTime[0]==23:
-            self.intraDay = bar.datetime
-        else:
-            if time(bar.datetime.hour,bar.datetime.minute) > time(19,00):
-                self.intraDay = bar.datetime+timedelta(hours=5)
-                if self.intraDay.weekday() == 6:
-                    self.intraDay = self.intraDay+timedelta(days=2)
-
-        if self.intraDay.date()!=bar.datetime.date():
-            if self.Candle:
-                # 推送
-                self.onCandle(self.Candle)
-                # 清空老K线缓存对象
-                self.Candle = None
-
         if not self.Candle:
             self.Candle = VtBarData()
 
@@ -218,24 +202,31 @@ class BarGenerator(object):
             self.Candle.open = bar.open
             self.Candle.high = bar.high
             self.Candle.low = bar.low
-            self.Candle.datetime = bar.datetime.replace(second=0, microsecond=0)  # 将秒和微秒设为0
-            self.Candle.date = bar.datetime.strftime('%Y%m%d')
-            self.Candle.time = bar.datetime.strftime('%H:%M:%S.%f')
 
         # 累加老K线
+        self.Candle.datetime = bar.datetime.replace(second=0, microsecond=0)  # 将秒和微秒设为0
+        self.Candle.date = bar.datetime.strftime('%Y%m%d')
+        self.Candle.time = bar.datetime.strftime('%H:%M:%S.%f')
         self.Candle.high = max(self.Candle.high, bar.high)
         self.Candle.low = min(self.Candle.low, bar.low)
         self.Candle.close = bar.close
         self.Candle.openInterest = bar.openInterest
-        self.Candle.volume += int(bar.volume)
+        self.Candle.volume += bar.volume
+
+        # 推送
+        if (bar.datetime.hour,bar.datetime.minute) == self.runningTime:
+            if self.Candle:
+                self.onCandle(self.Candle)
+                # 清空老K线缓存对象
+                self.Candle = None
 
     def updateWCandle(self, Candle):
         """周K线更新"""
         # 尚未创建对象
-        a = int(Candle.datetime.now().strftime('%Y%m%d'))
-        b = int(a/7)
-
-        if b != self.intraWeek:
+        a = Candle.datetime.strftime('%W')
+        if not self.intraWeek:
+            self.intraWeek = a
+        if a != self.intraWeek:
             # 推送
             if self.WeekCandle:
                 self.onWCandle(self.WeekCandle)
@@ -261,13 +252,15 @@ class BarGenerator(object):
         self.WeekCandle.low = min(self.WeekCandle.low, Candle.low)
         self.WeekCandle.close = Candle.close
         self.WeekCandle.openInterest = Candle.openInterest
-        self.WeekCandle.volume += int(Candle.volume)
-        self.intraWeek = b
+        self.WeekCandle.volume += Candle.volume
+        self.intraWeek = a
 
     def updateMCandle(self, Candle):
         """月K线更新"""
         # 尚未创建对象
-        a=int(datetime.now().strftime('%m'))
+        a=int(Candle.datetime.strftime('%m'))
+        if not self.intraMonth:
+            self.intraMonth = a 
 
         if a != self.intraMonth:
             # 推送
@@ -295,7 +288,7 @@ class BarGenerator(object):
         self.MonthCandle.low = min(self.MonthCandle.low, Candle.low)
         self.MonthCandle.close = Candle.close
         self.MonthCandle.openInterest = Candle.openInterest
-        self.MonthCandle.volume += int(Candle.volume)
+        self.MonthCandle.volume += Candle.volume
         self.intraMonth = a
 
     #--------------------------            
