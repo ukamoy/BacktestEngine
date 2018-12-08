@@ -478,7 +478,7 @@ class BacktestingEngine(object):
             for d in range((endDate - startDate).days + 1):
                 day = startDate + timedelta(days=d) - timedelta(hours=6)
                 if maincontract:
-                    temp = {k: v[v.datetime == i]['open_interest'].values[0] for k, v in df.items() if
+                    temp = {k: v[v.datetime == i]['openInterest'].values[0] for k, v in df.items() if
                             not v[v.datetime == i].empty}
                     if temp:
                         if max(temp, key=temp.get) != maincontract:
@@ -516,7 +516,7 @@ class BacktestingEngine(object):
                         [data, df[maincontract][(df[maincontract].datetime > i) & (df[maincontract].datetime <= day)]])
 
                 else:
-                    temp = {k: v[v.datetime == day]['open_interest'].values[0] for k, v in df.items() if
+                    temp = {k: v[v.datetime == day]['openInterest'].values[0] for k, v in df.items() if
                             not v[v.datetime == day].empty}
                     if temp:
                         maincontract = max(temp, key=temp.get)
@@ -1311,8 +1311,8 @@ class BacktestingEngine(object):
         totalLosing = 0         # 总亏损金额        
 
         longPnlList = []
-        
         shortPnlList = []
+        holdingList = []
         
         for result in resultList:
             capital += result.pnl
@@ -1340,6 +1340,9 @@ class BacktestingEngine(object):
                 longPnlList.append(result.pnl)
             if result.volume < 0 :
                 shortPnlList.append(result.pnl)
+
+            holdingdays = result.exitDt-result.entryDt
+            holdingList.append(holdingdays)
         # 计算盈亏相关数据
         winningRate = winningResult/totalResult*100         # 胜率
         
@@ -1376,6 +1379,7 @@ class BacktestingEngine(object):
         d['posList'] = posList
         d['tradeTimeList'] = tradeTimeList
         d['resultList'] = resultList
+        d['holdingPeriod'] = holdingList
         
         return d
         
@@ -1412,17 +1416,21 @@ class BacktestingEngine(object):
         # 绘图
         fig = plt.figure(figsize=(10, 16))
         
-        pCapital = plt.subplot(3, 1, 1)
+        pCapital = plt.subplot(4, 1, 1)
         pCapital.set_ylabel("capital")
         pCapital.plot(d['capitalList'], color='r', lw=0.8)
 
-        plong = plt.subplot(3, 1, 2)
+        plong = plt.subplot(4, 1, 2)
         plong.set_ylabel("LONG_pnl")
         plong.plot(d['longPnl'])
 
-        pshort = plt.subplot(3, 1, 3)
+        pshort = plt.subplot(4, 1, 3)
         pshort.set_ylabel("SHORT_pnl")
         pshort.plot(d['shortPnl'])
+
+        pHold = plt.subplot(4,1,4)
+        pHold.set_ylabel("Holding_Period")
+        pHold.plot(d['holdingPeriod'])
         
 
         # 输出回测结果
@@ -1477,19 +1485,19 @@ class BacktestingEngine(object):
         if d['posList'][-1] == 0:
             del d['posList'][-1]
 
-        if len(d['tradeTimeList'])>10:
-            tradeTimeIndex = [item.strftime("%m/%d %H:%M:%S") for item in d['tradeTimeList']]
-            xindex = np.arange(0, len(tradeTimeIndex), np.int(len(tradeTimeIndex)/10))
-            tradeTimeIndex = [tradeTimeIndex[i] for i in xindex]
-            pPos.plot(d['posList'], color='k', drawstyle='steps-pre')
-            pPos.set_ylim(-1.2, 1.2)
-            plt.sca(pPos)
-            plt.tight_layout()
-            plt.xticks(xindex, tradeTimeIndex, rotation=30)  # 旋转15
+        # if len(d['tradeTimeList'])>10:
+        tradeTimeIndex = [item.strftime("%m/%d %H:%M:%S") for item in d['tradeTimeList']]
+        xindex = np.arange(0, len(tradeTimeIndex), np.int(len(tradeTimeIndex)/10))
+        tradeTimeIndex = [tradeTimeIndex[i] for i in xindex]
+        pPos.plot(d['posList'], color='k', drawstyle='steps-pre')
+        pPos.set_ylim(-1.2, 1.2)
+        plt.sca(pPos)
+        plt.tight_layout()
+        plt.xticks(xindex, tradeTimeIndex, rotation=30)  # 旋转15
             
-        else:
-            self.output("交易记录没有达到10笔！")
-            return
+        # else:
+        #     self.output("交易记录没有达到10笔！")
+        #     return
         
         # 输出回测统计图-2
         if self.logActive:

@@ -122,9 +122,8 @@ class VtBarData(VtBaseData):
         self.datetime = None                # python的datetime时间对象
         
         self.volume = EMPTY_FLOAT           # 成交量
-        self.open_interest = EMPTY_INT       # 持仓量    
+        self.openInterest = EMPTY_INT       # 持仓量    
     
-
 ########################################################################
 class VtTradeData(VtBaseData):
     """成交数据类"""

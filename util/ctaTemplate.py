@@ -11,6 +11,7 @@ import requests
 from collections import defaultdict
 from .vtConstant import *
 from .vtObject import VtBarData
+from .vtUtility import BarGenerator, ArrayManager
 
 from .ctaBase import *
 
@@ -264,36 +265,28 @@ class CtaTemplate(object):
         #         for tick in initdata:
         #             self.onTick(tick)  # 将历史数据直接推送到onTick  
     
-    def generateBarDict(self, onBar, xmin=0, onXminBar=None, size = 100):
+    def generateBarDict(self, onBar, xmin=0, onXminBar=None, alignment='full',marketClose =(23,59),size = 100):
         if xmin: 
             variable = "bg%sDict"%xmin
             variable2 = "am%sDict"%xmin
-            variable3 = "mdf%sDict"%xmin
         else:
             variable = "bgDict"
             variable2 = "amDict"
-            variable3 = "mdfDict"
-
         bgDict= {
-            sym: BarGenerator(onBar,xmin,onXminBar)
+            sym: BarGenerator(onBar,xmin,onXminBar,marketClose)
             for sym in self.symbolList }
         
         amDict = {
             sym: ArrayManager(size)
             for sym in self.symbolList }
 
-        mdfDict = {
-            sym: MatrixDF(size)
-            for sym in self.symbolList }
-        
-
         setattr(self, variable, bgDict)
         setattr(self, variable2, amDict)
-        setattr(self, variable3, mdfDict)
 
-    def generateHFBar(self,xSecond):
+    def generateHFBar(self,xSecond,size = 60):
         self.hfDict = {sym: BarGenerator(self.onHFBar,xSecond = xSecond)
                         for sym in self.symbolList}
+        self.amhfDict = {sym: ArrayManager(size) for sym in self.symbolList}
             
 ########################################################################
 class TargetPosTemplate(CtaTemplate):

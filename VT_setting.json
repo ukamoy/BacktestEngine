@@ -2,7 +2,7 @@
 	"fontFamily": "SimHei",
 	"fontSize": 10,
 
-	"mongoHost": "192.168.0.166",
+	"mongoHost": "192.168.0.104",
 	"mongoPort": 27017,
 	"mongoLogging": false,
 

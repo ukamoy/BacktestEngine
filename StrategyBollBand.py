@@ -63,7 +63,7 @@ class BollBandsStrategy(CtaTemplate):
         #       用于生成 on5MinBar 需要的 Bar 和计算指标信号用的 bar array，可在 on5MinBar() 获取到
         self.generateBarDict(self.onBar)  
         self.generateBarDict(self.onBar,15,self.on15MinBar,size =self.slowWindow*3)
-        self.generateBarDict(self.onBar,60,self.on60MinBar,size =self.slowWindow*3,alignment = 'full')
+        self.generateBarDict(self.onBar,60,self.on60MinBar,size =self.slowWindow*3, alignment = 'full')
 
         # 对于高频交易员，提供秒级别的 Bar，或者可当作秒级计数器，参数为秒，可在 onHFBar() 获取
         self.generateHFBar(10)
@@ -234,24 +234,24 @@ class BollBandsStrategy(CtaTemplate):
                 self.buy(symbol,             # 下单交易品种
                         bar.close*1.01,      # 下单的价格
                         1,                   # 交易数量
-                        priceType = PRICETYPE_LIMITPRICE,   # 价格类型：[PRICETYPE_LIMITPRICE,PRICETYPE_MARKETPRICE,PRICETYPE_FAK,PRICETYPE_FOK]
-                        levelRate = 10)      # 保证金交易可填杠杆参数，默认levelRate = 0
+                        priceType = PRICETYPE_LIMITPRICE  # 价格类型：[PRICETYPE_LIMITPRICE,PRICETYPE_MARKETPRICE,PRICETYPE_FAK,PRICETYPE_FOK]
+                        ) 
 
         if  (sigmaKdjMa[-1]>self.highVolRate) and (MA[-1]< MA[-3]): # parameter6
             if self.posDict[symbol+"_LONG"] > 0:
                 self.cancelAll()
-                self.sell(symbol, bar.close*0.99, self.posDict[symbol+"_LONG"],levelRate = 10)
+                self.sell(symbol, bar.close*0.99, self.posDict[symbol+"_LONG"])
 
         if  (self.maTrend==-1) and (MA[-1] < MA[-3]) and (sigmaKdjMa[-1]<self.lowVolRate):
             if self.stopLossControl==1:
                 self.stopLossControl=0
             if self.posDict[symbol+"_SHORT"]==0 and self.stopLossControl == 0:
-                self.short(symbol,bar.close*0.99, 1,levelRate = 10)
+                self.short(symbol,bar.close*0.99, 1)
 
         if  (sigmaKdjMa[-1]>self.highVolRate) and (MA[-1] > MA[-3]):
             if self.posDict[symbol+"_SHORT"] > 0:
                 self.cancelAll()
-                self.cover(symbol, bar.close*1.01, self.posDict[symbol+"_SHORT"],levelRate = 10)
+                self.cover(symbol, bar.close*1.01, self.posDict[symbol+"_SHORT"])
 
     #----------------------------------------------------------------------
     def onOrder(self, order):
