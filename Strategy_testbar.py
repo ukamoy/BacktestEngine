@@ -42,7 +42,7 @@ class BarStrategy(CtaTemplate):
         # self.generateBarDict(self.onBar,5,self.on5MinBar,size =self.size)
         # self.generateBarDict(self.onBar,30,self.on30MinBar,size =self.size)
         self.generateBarDict(self.onBar,60,self.on60MinBar,size =self.size)
-        self.bgDayDict= BarGenerator(self.onCandle,runningTime =(14,59))
+        self.bgDayDict= BarGenerator(self.onCandle,marketClose =(14,59))
         self.bgWeekDict = BarGenerator(self.onWCandle)
         self.bgMonDict = BarGenerator(self.onMCandle)
         self.amweekDict = ArrayManager(25)

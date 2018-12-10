@@ -182,8 +182,9 @@ class BarGenerator(object):
             self.xminBar.volume += bar.volume
         
         if (bar.datetime.hour, bar.datetime.minute) == self.marketClose:   # 强制收盘切断
-            self.onXminBar(self.xminBar)
-            self.xminBar = None
+            if self.xminBar:
+                self.onXminBar(self.xminBar)
+                self.xminBar = None
 
     #----------------------------------------------------------------------
     def updateCandle(self, bar):
