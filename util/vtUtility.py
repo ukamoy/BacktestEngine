@@ -5,7 +5,7 @@ import talib
 import pandas as  pd
 from datetime import datetime, time, timedelta
 
-from vnpy.trader.vtObject import VtBarData
+from .vtObject import VtBarData
 class BarGenerator(object):
     """
     K线合成器，支持：
@@ -13,7 +13,7 @@ class BarGenerator(object):
     2. 基于1分钟K线合成X分钟K线（X可以是2、3、5、10、15、30、60）
     """
     # ----------------------------------------------------------------------
-    def __init__(self, onBar, xmin=0, onXminBar=None, xSecond = 0, alignment='sharp', incomplete = False, marketClose = (23,59)):
+    def __init__(self, onBar, xmin=0, onXminBar=None, xSecond = 0, alignment='sharp', marketClose = (23,59)):
         """Constructor"""
         self.bar = None  # 1分钟K线对象
         self.onBar = onBar  # 1分钟K线回调函数
@@ -40,7 +40,6 @@ class BarGenerator(object):
 
         self.marketClose = marketClose
         self.alignment = alignment
-        self.incomplete = incomplete
 
     # ----------------------------------------------------------------------
     def updateTick(self, tick):
@@ -222,15 +221,8 @@ class BarGenerator(object):
     def updateWCandle(self, Candle):
         """周K线更新"""
         # 尚未创建对象
-        abstract_week = Candle.datetime.strftime('%W')
         if not self.intraWeek:
-            self.intraWeek = abstract_week
-        if abstract_week != self.intraWeek:
-            # 推送
-            if self.WeekCandle:
-                self.onWCandle(self.WeekCandle)
-                # 清空老K线缓存对象
-                self.WeekCandle = None
+            self.intraWeek = Candle.datetime.strftime('%W')
 
         if not self.WeekCandle:
             self.WeekCandle = VtBarData()
@@ -252,30 +244,25 @@ class BarGenerator(object):
         self.WeekCandle.close = Candle.close
         self.WeekCandle.openInterest = Candle.openInterest
         self.WeekCandle.volume += Candle.volume
-        self.intraWeek = abstract_week
 
-        if (Candle.datetime.hour,Candle.datetime.minute) == self.marketClose and self.marketClose != (23,59):
-            if Candle.datetime.strftime('%w') == 5:  # 每周五收盘强切周线
-                self.onWCandle(self.WeekCandle)
-                self.WeekCandle = None
-        elif (Candle.datetime.hour,Candle.datetime.minute) == self.marketClose and self.marketClose == (23,59):
-            if Candle.datetime.strftime('%w') == 0:  # 7*24市场在周日晚0点切
-                self.onWCandle(self.WeekCandle)
-                self.WeekCandle = None
+        if (Candle.datetime.hour,Candle.datetime.minute) == self.marketClose:
+            if self.marketClose != (23,59):
+                if Candle.datetime.strftime('%w') == 5:  # 每周五收盘强切周线
+                    self.onWCandle(self.WeekCandle)
+                    self.WeekCandle = None
+                    self.intraWeek = (Candle.datetime+timedleta(days=3)).strftime('%w')
+
+            elif self.marketClose == (23,59):
+                if Candle.datetime.strftime('%w') == 0:  # 7*24市场在周日晚0点切
+                    self.onWCandle(self.WeekCandle)
+                    self.WeekCandle = None
+                    self.intraWeek = (Candle.datetime+timedleta(days=3)).strftime('%w')
 
     def updateMCandle(self, Candle):
         """月K线更新"""
         # 尚未创建对象
-        abstract_month=int(Candle.datetime.strftime('%m'))
         if not self.intraMonth:
-            self.intraMonth = abstract_month 
-
-        if abstract_month != self.intraMonth:
-            # 推送
-            if self.MonthCandle:
-                self.onMCandle(self.MonthCandle)
-                # 清空老K线缓存对象
-                self.MonthCandle = None
+            self.intraMonth = Candle.datetime.month 
 
         if not self.MonthCandle:
             self.MonthCandle = VtBarData()
@@ -297,11 +284,12 @@ class BarGenerator(object):
         self.MonthCandle.close = Candle.close
         self.MonthCandle.openInterest = Candle.openInterest
         self.MonthCandle.volume += Candle.volume
-        self.intraMonth = abstract_month
 
-        # if (Candle.datetime + timedelta(days=3)).strftime('%m') != self.intraMonth:  # 强制月底收盘切断
-        #     self.onMCandle(self.MonthCandle)
-        #     self.MonthCandle = None
+        if Candle.datetime.strftime('%w') == 5:
+            if (Candle.datetime + timedelta(days=3)).month != self.intraMonth:  # 强制月底收盘切断
+                self.onMCandle(self.MonthCandle)
+                self.MonthCandle = None
+                self.intraMonth = (Candle.datetime + timedelta(days=3)).month
 
     #--------------------------            
     def generate(self):
@@ -350,6 +338,15 @@ class ArrayManager(object):
             self.array['close'][-1] = float(bar.close)
 
             self.array['volume'][0:self.size - 1] = self.array['volume'][1:self.size]
+            self.array['volume'][-1] = float(bar.volume)
+
+    def rollingUpdateBar(self, bar):
+        if bar:  # 如果是实盘K线
+            self.array['datetime'][-1] = bar.datetime.strftime('%Y%m%d %H:%M:%S')
+            self.array['open'][-1] = float(bar.open)
+            self.array['high'][-1] = float(bar.high)
+            self.array['low'][-1] = float(bar.low)
+            self.array['close'][-1] = float(bar.close)
             self.array['volume'][-1] = float(bar.volume)
 
     # ----------------------------------------------------------------------
