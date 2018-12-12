@@ -64,11 +64,12 @@ class BacktestingEngine(object):
         self.endDate = ''
 
         self.capital = 1000000      # 回测时的起始本金（默认100万）
+        self.symbolList = []        # 设置交易品种
         self.balance = 0            # 回测判断是否可以下单的资金变量
-        self.slippage = 0           # 回测时假设的滑点
-        self.rate = 0               # 回测时假设的佣金比例（适用于百分比佣金）
-        self.size = 1               # 合约大小，默认为1    
-        self.priceTick = 0          # 价格最小变动 
+        self.slippageDict = {}           # 回测时假设的滑点
+        self.rateDict = {}               # 回测时假设的佣金比例（适用于百分比佣金）
+        self.sizeDict = {}               # 合约大小，默认为1    
+        self.priceTickDict = {}          # 价格最小变动 
         
         self.dbClient = None        # 数据库客户端
         self.dbCursor = None        # 数据库指针
@@ -170,26 +171,59 @@ class BacktestingEngine(object):
     def setCapital(self, capital):
         """设置资本金"""
         self.capital = capital
-    
+  
     #----------------------------------------------------------------------
-    def setSlippage(self, slippage):
+    def setSlippage(self, slippage = 0):
         """设置滑点点数"""
-        self.slippage = slippage
+        if len(slippage) > len(self.symbolList):
+            print("slippage beyond symbolList boundary")
+        elif len(slippage) < len(self.symbolList):
+            for sym in self.symbolList:
+                self.slippageDict[sym] = slippage
+        else:
+            for i, sym in enumerate(self.symbolList):
+                self.slippageDict[sym] = slippage[i]
         
     #----------------------------------------------------------------------
-    def setSize(self, size):
+    def setSize(self, size = 1):
         """设置合约大小"""
-        self.size = size
+        if len(size) > len(self.symbolList):
+            print("size beyond symbolList boundary")
+        elif len(size) < len(self.symbolList):
+            for sym in self.symbolList:
+                self.sizeDict[sym] = size
+        else:
+            for i, sym in enumerate(self.symbolList):
+                self.sizeDict[sym] = size[i]
         
     #----------------------------------------------------------------------
-    def setRate(self, rate):
+    def setRate(self, rate = 0):
         """设置佣金比例"""
-        self.rate = rate
+        if len(rate) > len(self.symbolList):
+            print("rate beyond symbolList boundary")
+        elif len(rate) < len(self.symbolList):
+            for sym in self.symbolList:
+                self.rateDict[sym] = rate
+        else:
+            for i, sym in enumerate(self.symbolList):
+                self.rateDict[sym] = rate[i]
         
     #----------------------------------------------------------------------
-    def setPriceTick(self, priceTick):
+    def setPriceTick(self, priceTick = 0):
         """设置价格最小变动"""
-        self.priceTick = priceTick
+        if len(priceTick) > len(self.symbolList):
+            print("priceTick beyond symbolList boundary")
+        elif len(priceTick) < len(self.symbolList):
+            for sym in self.symbolList:
+                self.priceTickDict[sym] = priceTick
+        else:
+            for i, sym in enumerate(self.symbolList):
+                self.priceTickDict[sym] = priceTick[i]
+
+    #----------------------------------------------------------------------
+    def setSymbolList(self, symbolList):
+        """设置资本金"""
+        self.symbolList = symbolList
 
     def setLog(self, active = False, path = None):
         """设置是否出交割单和日志"""
@@ -818,7 +852,7 @@ class BacktestingEngine(object):
                         closedVolume = min(exitTrade.volume, entryTrade.volume)
                         result = TradingResult(entryTrade.price, entryTrade.dt, 
                                                exitTrade.price, exitTrade.dt,
-                                               -closedVolume, self.rate, self.slippage, self.size)
+                                               -closedVolume, self.rateDict[trade.vtSymbol], self.slippageDict[trade.vtSymbol], self.sizeDict[trade.vtSymbol])
                         resultList.append(result)
                         deliverSheet.append(result.__dict__)
                         
@@ -863,7 +897,7 @@ class BacktestingEngine(object):
                         closedVolume = min(exitTrade.volume, entryTrade.volume)
                         result = TradingResult(entryTrade.price, entryTrade.dt, 
                                                exitTrade.price, exitTrade.dt,
-                                               closedVolume, self.rate, self.slippage, self.size)
+                                               closedVolume, self.rateDict[trade.vtSymbol], self.slippageDict[trade.vtSymbol], self.sizeDict[trade.vtSymbol])
                         resultList.append(result)
                         deliverSheet.append(result.__dict__)
                         
@@ -902,7 +936,7 @@ class BacktestingEngine(object):
 
             for trade in tradeList:
                 result = TradingResult(trade.price, trade.dt, endPrice, self.dt,
-                                       trade.volume, self.rate, self.slippage, self.size)
+                                       trade.volume, self.rateDict[symbol], self.slippageDict[symbol], self.sizeDict[symbol])
 
                 resultList.append(result)
                 deliverSheet.append(result.__dict__)
@@ -916,7 +950,7 @@ class BacktestingEngine(object):
 
             for trade in tradeList:
                 result = TradingResult(trade.price, trade.dt, endPrice, self.dt,
-                                       -trade.volume, self.rate, self.slippage, self.size)
+                                       -trade.volume, self.rateDict[symbol], self.slippageDict[symbol], self.sizeDict[symbol])
                 resultList.append(result)
                 deliverSheet.append(result.__dict__)
 
@@ -1172,8 +1206,8 @@ class BacktestingEngine(object):
             l.append(pool.apply_async(optimize, (strategyClass, setting,
                                                  targetName, self.mode, 
                                                  self.startDate, self.initHours, self.endDate,
-                                                 self.slippage, self.rate, self.size, self.priceTick,
-                                                 self.dbName, self.symbol)))
+                                                 self.slippageDict, self.rateDict, self.sizeDict, self.priceTickDict,
+                                                 self.dbName, self.symbolList)))
         pool.close()
         pool.join()
         

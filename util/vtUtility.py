@@ -5,7 +5,7 @@ import talib
 import pandas as  pd
 from datetime import datetime, time, timedelta
 
-from .vtObject import VtBarData
+from vnpy.trader.vtObject import VtBarData
 class BarGenerator(object):
     """
     K线合成器，支持：
@@ -142,8 +142,9 @@ class BarGenerator(object):
             self.BarDone+=1
 
             if self.BarDone == self.xmin:
-                self.onXminBar(self.xminBar)
-                self.xminBar = None
+                if self.xminBar:
+                    self.onXminBar(self.xminBar)
+                    self.xminBar = None
 
         elif self.alignment == 'sharp':
             # X分钟已经走完
@@ -167,18 +168,18 @@ class BarGenerator(object):
                 self.xminBar.date = bar.datetime.strftime('%Y%m%d')
                 self.xminBar.time = bar.datetime.strftime('%H:%M:%S.%f')
 
-                if self.xmin < 61:
+                if self.xmin < 60:
                     diff = bar.datetime.minute % self.xmin
                     self.BarDone = self.xminBar.datetime + timedelta(seconds=(self.xmin-diff)*60-1)
                     
-                elif self.xmin > 60:
+                elif self.xmin > 59:
                     diff = (bar.datetime.hour * 60 ) % self.xmin
                     self.BarDone = self.xminBar.datetime + timedelta(seconds=(self.xmin-diff)*60-1)
 
             self.xminBar.high = max(self.xminBar.high, bar.high)
             self.xminBar.low = min(self.xminBar.low, bar.low)
             self.xminBar.close = bar.close
-            # self.xminBar.openInterest = bar.openInterest
+            self.xminBar.openInterest = bar.openInterest
             self.xminBar.volume += bar.volume
         
         if (bar.datetime.hour, bar.datetime.minute) == self.marketClose:   # 强制收盘切断
@@ -253,11 +254,11 @@ class BarGenerator(object):
         self.WeekCandle.volume += Candle.volume
         self.intraWeek = abstract_week
 
-        if (bar.datetime.hour,bar.datetime.minute) == self.marketClose and self.marketClose != (23,59):
+        if (Candle.datetime.hour,Candle.datetime.minute) == self.marketClose and self.marketClose != (23,59):
             if Candle.datetime.strftime('%w') == 5:  # 每周五收盘强切周线
                 self.onWCandle(self.WeekCandle)
                 self.WeekCandle = None
-        elif (bar.datetime.hour,bar.datetime.minute) == self.marketClose and self.marketClose == (23,59):
+        elif (Candle.datetime.hour,Candle.datetime.minute) == self.marketClose and self.marketClose == (23,59):
             if Candle.datetime.strftime('%w') == 0:  # 7*24市场在周日晚0点切
                 self.onWCandle(self.WeekCandle)
                 self.WeekCandle = None
@@ -308,9 +309,6 @@ class BarGenerator(object):
         self.onBar(self.bar)
         self.bar = None
 
-    def updateHalfBar(self,Bar):
-        """非完整Bar的合并"""
-        pass
 
 # ########################################################################
 class ArrayManager(object):
