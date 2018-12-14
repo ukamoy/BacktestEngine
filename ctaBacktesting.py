@@ -80,12 +80,11 @@ class BacktestingEngine(object):
         self.symbol = ''            # 回测集合名
         self.backtestData = []      # 回测用历史数据
 
-
         self.cachePath = os.path.join(os.path.expanduser("~"), ".vnpy_data")       # 本地数据缓存地址
         self.logActive = False      # 回测日志开关
-        self.logPath = None         # 回测日志自定义路径
-        self.logFolderName = u'策略报告_' + datetime.now().strftime("%Y%m%d-%H%M%S") # 当次日志文件夹名称
-
+        self.logFolderName = u'BackTest_Reports_' + datetime.now().strftime("%Y%m%d-%H%M%S") # 当次日志文件夹名称
+        self.logPath = os.path.join(os.getcwd(), "Backtest_Log", self.logFolderName)         # 回测日志自定义路径
+        
         self.dataStartDate = None       # 回测数据开始日期，datetime对象
         self.dataEndDate = None         # 回测数据结束日期，datetime对象
         self.strategyStartDate = None   # 策略启动日期（即前面的数据用于初始化），datetime对象
@@ -176,7 +175,7 @@ class BacktestingEngine(object):
     def setSlippage(self, slippage = 0):
         """设置滑点点数"""
         if len(slippage) > len(self.symbolList):
-            print("slippage beyond symbolList boundary")
+            raise Exception("slippage beyond symbolList boundary")
         elif len(slippage) < len(self.symbolList):
             for sym in self.symbolList:
                 self.slippageDict[sym] = slippage
@@ -188,7 +187,7 @@ class BacktestingEngine(object):
     def setSize(self, size = 1):
         """设置合约大小"""
         if len(size) > len(self.symbolList):
-            print("size beyond symbolList boundary")
+            raise Exception("size beyond symbolList boundary")
         elif len(size) < len(self.symbolList):
             for sym in self.symbolList:
                 self.sizeDict[sym] = size
@@ -200,7 +199,7 @@ class BacktestingEngine(object):
     def setRate(self, rate = 0):
         """设置佣金比例"""
         if len(rate) > len(self.symbolList):
-            print("rate beyond symbolList boundary")
+            raise Exception("rate beyond symbolList boundary")
         elif len(rate) < len(self.symbolList):
             for sym in self.symbolList:
                 self.rateDict[sym] = rate
@@ -212,7 +211,7 @@ class BacktestingEngine(object):
     def setPriceTick(self, priceTick = 0):
         """设置价格最小变动"""
         if len(priceTick) > len(self.symbolList):
-            print("priceTick beyond symbolList boundary")
+            raise Exception("priceTick beyond symbolList boundary")
         elif len(priceTick) < len(self.symbolList):
             for sym in self.symbolList:
                 self.priceTickDict[sym] = priceTick
@@ -222,15 +221,13 @@ class BacktestingEngine(object):
 
     #----------------------------------------------------------------------
     def setSymbolList(self, symbolList):
-        """设置资本金"""
+        """设置交易标的"""
         self.symbolList = symbolList
 
     def setLog(self, active = False, path = None):
         """设置是否出交割单和日志"""
         if path:
             self.logPath = os.path.join(path, self.logFolderName)
-        else:
-            self.logPath = os.path.join(os.getcwd(), "Backtest_Log", self.logFolderName)
         self.logActive = active
     #-------------------------------------------------
     def setCachePath(self, path):
@@ -351,7 +348,6 @@ class BacktestingEngine(object):
     #----------------------------------------------------------------------
     def runBacktesting(self):
         """运行回测"""
-
         dataLimit = 1000000
         self.clearBacktestingResult()  # 清空策略的所有状态（指如果多次运行同一个策略产生的状态）
         # 首先根据回测模式，确认要使用的数据类,以及数据的分批回放范围
@@ -786,23 +782,11 @@ class BacktestingEngine(object):
     #-------------------------------------------
     def initPosition(self,strategy):
         for symbol in strategy.symbolList:
-            if 'posDict' in strategy.syncList:
-                strategy.posDict[symbol+"_LONG"] = 0
-                strategy.posDict[symbol+"_SHORT"] = 0
-            if 'eveningDict' in strategy.syncList:
-                strategy.eveningDict[symbol+"_LONG"] = 0
-                strategy.eveningDict[symbol+"_SHORT"] = 0
-            if 'bondDict' in strategy.syncList:
-                strategy.bondDict[symbol+"_LONG"] = 0
-                strategy.bondDict[symbol+"_SHORT"] = 0
-            
-            symbolPair = symbol.split('_')
-            if 'accountDict' in strategy.syncList:
-                strategy.accountDict[symbolPair[0]] = 0
-                strategy.accountDict[symbolPair[1]] = 0
-            if 'frozenDict' in strategy.syncList:
-                strategy.frozenDict[symbolPair[0]] = 0
-                strategy.frozenDict[symbolPair[1]] = 0
+            strategy.posDict[symbol+"_LONG"] = 0
+            strategy.posDict[symbol+"_SHORT"] = 0
+            strategy.eveningDict[symbol+"_LONG"] = 0
+            strategy.eveningDict[symbol+"_SHORT"] = 0
+
         print("仓位字典构造完成","\n初始仓位:",strategy.posDict)
     
     def mail(self,content,strategy):
@@ -852,7 +836,7 @@ class BacktestingEngine(object):
                         
                         # 清算开平仓交易
                         closedVolume = min(exitTrade.volume, entryTrade.volume)
-                        result = TradingResult(entryTrade.price, entryTrade.tradeDatetime, 
+                        result = TradingResult(trade.vtSymbol, entryTrade.price, entryTrade.tradeDatetime, 
                                                exitTrade.price, exitTrade.tradeDatetime,
                                                -closedVolume, self.rateDict[trade.vtSymbol], self.slippageDict[trade.vtSymbol], self.sizeDict[trade.vtSymbol])
                         resultList.append(result)
@@ -897,7 +881,7 @@ class BacktestingEngine(object):
                         
                         # 清算开平仓交易
                         closedVolume = min(exitTrade.volume, entryTrade.volume)
-                        result = TradingResult(entryTrade.price, entryTrade.tradeDatetime, 
+                        result = TradingResult(trade.vtSymbol, entryTrade.price, entryTrade.tradeDatetime, 
                                                exitTrade.price, exitTrade.tradeDatetime,
                                                closedVolume, self.rateDict[trade.vtSymbol], self.slippageDict[trade.vtSymbol], self.sizeDict[trade.vtSymbol])
                         resultList.append(result)
@@ -937,7 +921,7 @@ class BacktestingEngine(object):
                 endPrice = self.tickDict[symbol].lastPrice
 
             for trade in tradeList:
-                result = TradingResult(trade.price, trade.tradeDatetime, endPrice, self.dt,
+                result = TradingResult(symbol, trade.price, trade.tradeDatetime, endPrice, self.dt,
                                        trade.volume, self.rateDict[symbol], self.slippageDict[symbol], self.sizeDict[symbol])
 
                 resultList.append(result)
@@ -951,7 +935,7 @@ class BacktestingEngine(object):
                 endPrice = self.tickDict[symbol].lastPrice
 
             for trade in tradeList:
-                result = TradingResult(trade.price, trade.tradeDatetime, endPrice, self.dt,
+                result = TradingResult(symbol, trade.price, trade.tradeDatetime, endPrice, self.dt,
                                        -trade.volume, self.rateDict[symbol], self.slippageDict[symbol], self.sizeDict[symbol])
                 resultList.append(result)
                 deliverSheet.append(result.__dict__)
@@ -1092,18 +1076,18 @@ class BacktestingEngine(object):
         if d['posList'][-1] == 0:
             del d['posList'][-1]
 
-        # if len(d['tradeTimeList'])>10:
-        tradeTimeIndex = [item.strftime("%m/%d %H:%M:%S") for item in d['tradeTimeList']]
-        xindex = np.arange(0, len(tradeTimeIndex), np.int(len(tradeTimeIndex)/10))
-        tradeTimeIndex = list(map(lambda i: tradeTimeIndex[i], xindex))
-        pPos.plot(d['posList'], color='k', drawstyle='steps-pre')
-        pPos.set_ylim(-1.2, 1.2)
-        plt.sca(pPos)
-        plt.tight_layout()
-        plt.xticks(xindex, tradeTimeIndex, rotation=30)  # 旋转15
-        # else:
-        #     self.output("交易记录没有达到10笔！")
-        #     return
+        if len(d['tradeTimeList'])>10:
+            tradeTimeIndex = [item.strftime("%m/%d %H:%M:%S") for item in d['tradeTimeList']]
+            xindex = np.arange(0, len(tradeTimeIndex), np.int(len(tradeTimeIndex)/10))
+            tradeTimeIndex = list(map(lambda i: tradeTimeIndex[i], xindex))
+            pPos.plot(d['posList'], color='k', drawstyle='steps-pre')
+            pPos.set_ylim(-1.2, 1.2)
+            plt.sca(pPos)
+            plt.tight_layout()
+            plt.xticks(xindex, tradeTimeIndex, rotation=30)  # 旋转15
+        else:
+            self.output("交易记录没有达到10笔！")
+            return
         
         # 输出回测统计图
         if self.logActive:
@@ -1140,7 +1124,7 @@ class BacktestingEngine(object):
         self.backtestData = []
 
         # # 清空日线回测结果
-        # self.dailyResultDict = defaultdict(OrderedDict)
+        self.dailyResultDict = defaultdict(OrderedDict)
         
     #----------------------------------------------------------------------
     def runOptimization(self, strategyClass, optimizationSetting):
@@ -1240,8 +1224,7 @@ class BacktestingEngine(object):
         # 将成交添加到每日交易结果中
         for trade in self.tradeDict.values():
             date = trade.tradeDatetime.date()
-            symbol = trade.vtSymbol
-            dailyResult = self.dailyResultDict[symbol][date]
+            dailyResult = self.dailyResultDict[trade.vtSymbol][date]
             dailyResult.addTrade(trade)
             
 
@@ -1422,9 +1405,10 @@ class TradingResult(object):
     """每笔交易的结果"""
 
     #----------------------------------------------------------------------
-    def __init__(self, entryPrice, entryDt, exitPrice, 
+    def __init__(self, symbol, entryPrice, entryDt, exitPrice, 
                  exitDt, volume, rate, slippage, size):
         """Constructor"""
+        self.tradingSymbol = symbol
         self.entryPrice = entryPrice    # 开仓价格
         self.exitPrice = exitPrice      # 平仓价格
         
@@ -1562,7 +1546,6 @@ class OptimizationSetting(object):
         """设置优化目标字段"""
         self.optimizeTarget = target
 
-
 ########################################################################
 class HistoryDataServer(RpcServer):
     """历史数据缓存服务器"""
@@ -1673,7 +1656,6 @@ def get_date_list(start=None, end=None):
     return data
 
 def gen_hours(b_date, days, hours):
-    # day = timedelta(days=1)
     hour = timedelta(hours = 1)
     for i in range(days*24+hours):
         yield b_date + hour*i
@@ -1695,4 +1677,3 @@ def get_time_list(start=None, end=None):
     for d in gen_hours(start, days,hours):
         data.append(d)
     return data
-
