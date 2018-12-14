@@ -20,20 +20,21 @@ if __name__ == '__main__':
     # 设置回测用的数据起始日期，initHours 默认值为 0
     engine.setStartDate('20181206 06:00',initHours = 6000)   
     engine.setEndDate('20181207 08:00')
-    # 设置产品相关参数
+
+    # 设置交易标的相关参数
     engine.setCapital(1000000)  # 设置起始资金，默认值是1,000,000
-    engine.setSymbolList(['rb:SHF','jm:DCE'])
-    engine.setSlippage([0.01,0.05])    # 股指1跳
-    engine.setRate([0.3/10000,0.00001])   # 万0.3
-    engine.setSize([300,500])         # 股指合约大小 
-    engine.setPriceTick([0.2,0.3])    # 股指最小价格变动
-    engine.setAnnualDays(240)   # 设置年交易日
+    engine.setSymbolList(['rb:SHF','jm:DCE'])  # 设置交易品种列表
+    engine.setSlippage([0.01,0.05])       # 滑点比率
+    engine.setRate([0.3/10000,0.00001])   # 手续费率
+    engine.setSize([300,500])         # 合约乘数
+    engine.setPriceTick([0.2,0.3])    # 最小价格变动
+    engine.setAnnualDays(240)         # 设置年交易日
     
     # 策略报告默认不输出，默认文件夹生成于当前文件夹下
-    engine.setLog(True,"D:\\backtest_data\\log\\")        # 设置是否输出日志和交割单, 默认值是不输出False
-    engine.setCachePath("D:\\backtest_data\\") # 设置本地数据缓存的路径，默认存在用户文件夹内
+    engine.setLog(True,"D:\\backtest_data\\log\\")    # 设置是否输出日志和交割单, 默认值是不输出False
+    engine.setCachePath("D:\\backtest_data\\")        # 设置本地数据缓存的路径，默认存在用户文件夹内
     
-    # 在引擎中创建策略对象
+    # 在引擎中创建策略对象，setting为策略使用的参数
     engine.initStrategy(BollBandsStrategy, setting = {})
     
     # 开始跑回测

@@ -115,12 +115,12 @@ class BacktestingEngine(object):
     #------------------------------------------------    
     
     #----------------------------------------------------------------------
-    def roundToPriceTick(self, price):
+    def roundToPriceTick(self, vtSymbol, price):
         """取整价格到合约最小价格变动"""
-        if not self.priceTick:
+        if not self.priceTickDict[vtSymbol]:
             return price
         
-        newPrice = round(price/self.priceTick, 0) * self.priceTick
+        newPrice = round(price/self.priceTickDict[vtSymbol], 0) * self.priceTickDict[vtSymbol]
         return newPrice
 
     #----------------------------------------------------------------------
@@ -227,7 +227,10 @@ class BacktestingEngine(object):
 
     def setLog(self, active = False, path = None):
         """设置是否出交割单和日志"""
-        self.logPath = path
+        if path:
+            self.logPath = os.path.join(path, self.logFolderName)
+        else:
+            self.logPath = os.path.join(os.getcwd(), "Backtest_Log", self.logFolderName)
         self.logActive = active
     #-------------------------------------------------
     def setCachePath(self, path):
@@ -404,16 +407,10 @@ class BacktestingEngine(object):
         # 日志输出模块
         if self.logActive:
             dataframe = pd.DataFrame(self.logList)
-
-            if self.logPath:
-                save_path = os.path.join(self.logPath, self.logFolderName)
-            else:
-                save_path = os.path.join(os.getcwd(), self.logFolderName)
-
-            if not os.path.isdir(save_path):
-                os.makedirs(save_path)
-            filename = os.path.join(save_path, u"日志.csv" )
-            dataframe.to_csv(filename,index=False,sep=',')  
+            if not os.path.isdir(self.logPath):
+                os.makedirs(self.logPath)
+            filename = os.path.join(self.logPath, u"trading_log.csv" )
+            dataframe.to_csv(filename,index=False,sep=',',encoding="utf_8_sig")  
             self.output(u'策略日志已生成') 
         
     #----------------------------------------------------------------------
@@ -448,6 +445,7 @@ class BacktestingEngine(object):
         """
         self.strategy = strategyClass(self, setting)
         self.strategy.name = self.strategy.className
+        self.strategy.symbolList = self.symbolList
         self.initPosition(self.strategy)
 
     #----------------------------------------------------------------------
@@ -520,7 +518,8 @@ class BacktestingEngine(object):
                         self.strategy.eveningDict[symbol+"_LONG"] -= order.totalVolume
                     
                     trade.volume = order.totalVolume
-                    trade.tradeTime = self.dt#.strftime('%Y%m%d %H:%M:%S')
+                    trade.tradeTime = self.dt.strftime('%Y%m%d %H:%M:%S')
+                    trade.tradeDatetime = self.dt
                     trade.dt = self.dt
                     self.strategy.onTrade(trade)
                     
@@ -595,7 +594,8 @@ class BacktestingEngine(object):
                     trade.direction = so.direction
                     trade.offset = so.offset
                     trade.volume = so.volume
-                    trade.tradeTime = self.dt#.strftime('%Y%m%d %H:%M:%S')
+                    trade.tradeTime = self.dt.strftime('%Y%m%d %H:%M:%S')
+                    trade.tradeDatetime = self.dt
                     trade.dt = self.dt
                     
                     self.tradeDict[tradeID] = trade
@@ -635,6 +635,7 @@ class BacktestingEngine(object):
         order.orderID = orderID
         order.vtOrderID = orderID
         order.orderTime = self.dt.strftime('%Y%m%d %H:%M:%S')
+        order.orderDatetime = self.dt
         order.priceType = priceType
         
         # CTA委托类型映射
@@ -656,11 +657,11 @@ class BacktestingEngine(object):
                 raise Exception('***平仓数量大于可平量，请检查策略逻辑***')
 
         if priceType == PRICETYPE_LIMITPRICE:
-            order.price = self.roundToPriceTick(price)
+            order.price = self.roundToPriceTick(vtSymbol,price)
         elif priceType == PRICETYPE_MARKETPRICE and order.direction == DIRECTION_LONG:
-            order.price = self.roundToPriceTick(price) * 1000
+            order.price = self.roundToPriceTick(vtSymbol,price) * 1000
         elif priceType == PRICETYPE_MARKETPRICE and order.direction == DIRECTION_SHORT:
-            order.price = self.roundToPriceTick(price) / 1000
+            order.price = self.roundToPriceTick(vtSymbol,price) / 1000
 
         # 保存到限价单字典中
         self.workingLimitOrderDict[orderID] = order
@@ -675,7 +676,8 @@ class BacktestingEngine(object):
             order = self.workingLimitOrderDict[vtOrderID]
             
             order.status = STATUS_CANCELLED
-            order.cancelTime = self.dt#.strftime('%Y%m%d %H:%M:%S')
+            order.cancelTime = self.dt.strftime('%Y%m%d %H:%M:%S')
+            order.cancelDatetime = self.dt
             
             self.strategy.onOrder(order)
             
@@ -690,7 +692,7 @@ class BacktestingEngine(object):
         so = StopOrder()
         so.vtSymbol = vtSymbol
         so.priceType = priceType
-        so.price = self.roundToPriceTick(price)
+        so.price = self.roundToPriceTick(vtSymbol,price)
         so.volume = volume
         so.strategy = strategy
         so.status = STOPORDER_WAITING
@@ -850,8 +852,8 @@ class BacktestingEngine(object):
                         
                         # 清算开平仓交易
                         closedVolume = min(exitTrade.volume, entryTrade.volume)
-                        result = TradingResult(entryTrade.price, entryTrade.dt, 
-                                               exitTrade.price, exitTrade.dt,
+                        result = TradingResult(entryTrade.price, entryTrade.tradeDatetime, 
+                                               exitTrade.price, exitTrade.tradeDatetime,
                                                -closedVolume, self.rateDict[trade.vtSymbol], self.slippageDict[trade.vtSymbol], self.sizeDict[trade.vtSymbol])
                         resultList.append(result)
                         deliverSheet.append(result.__dict__)
@@ -895,8 +897,8 @@ class BacktestingEngine(object):
                         
                         # 清算开平仓交易
                         closedVolume = min(exitTrade.volume, entryTrade.volume)
-                        result = TradingResult(entryTrade.price, entryTrade.dt, 
-                                               exitTrade.price, exitTrade.dt,
+                        result = TradingResult(entryTrade.price, entryTrade.tradeDatetime, 
+                                               exitTrade.price, exitTrade.tradeDatetime,
                                                closedVolume, self.rateDict[trade.vtSymbol], self.slippageDict[trade.vtSymbol], self.sizeDict[trade.vtSymbol])
                         resultList.append(result)
                         deliverSheet.append(result.__dict__)
@@ -935,7 +937,7 @@ class BacktestingEngine(object):
                 endPrice = self.tickDict[symbol].lastPrice
 
             for trade in tradeList:
-                result = TradingResult(trade.price, trade.dt, endPrice, self.dt,
+                result = TradingResult(trade.price, trade.tradeDatetime, endPrice, self.dt,
                                        trade.volume, self.rateDict[symbol], self.slippageDict[symbol], self.sizeDict[symbol])
 
                 resultList.append(result)
@@ -949,7 +951,7 @@ class BacktestingEngine(object):
                 endPrice = self.tickDict[symbol].lastPrice
 
             for trade in tradeList:
-                result = TradingResult(trade.price, trade.dt, endPrice, self.dt,
+                result = TradingResult(trade.price, trade.tradeDatetime, endPrice, self.dt,
                                        -trade.volume, self.rateDict[symbol], self.slippageDict[symbol], self.sizeDict[symbol])
                 resultList.append(result)
                 deliverSheet.append(result.__dict__)
@@ -962,14 +964,9 @@ class BacktestingEngine(object):
         # 交割单输出模块
         if self.logActive:
             resultDF = pd.DataFrame(deliverSheet)
-            if self.logPath:
-                save_path = os.path.join(self.logPath, self.logFolderName)
-            else:
-                save_path = os.path.join(os.getcwd(), self.logFolderName)
-
-            if not os.path.isdir(save_path):
-                os.makedirs(save_path)
-            filename = os.path.join(save_path, u"交割单.csv" )
+            if not os.path.isdir(self.logPath):
+                os.makedirs(self.logPath)
+            filename = os.path.join(self.logPath, u"交割单.csv" )
             resultDF.to_csv(filename,index=False,sep=',')  
             self.output(u'交割单已生成') 
 
@@ -1111,15 +1108,9 @@ class BacktestingEngine(object):
         # 输出回测统计图
         if self.logActive:
             dataframe = pd.DataFrame(self.logList)
-
-            if self.logPath:
-                save_path = os.path.join(self.logPath, self.logFolderName)
-            else:
-                save_path = os.path.join(os.getcwd(), self.logFolderName)
-
-            if not os.path.isdir(save_path):
-                os.makedirs(save_path)
-            filename = os.path.join(save_path, u"回测统计图.png" )
+            if not os.path.isdir(self.logPath):
+                os.makedirs(self.logPath)
+            filename = os.path.join(self.logPath, u"回测统计图.png" )
             plt.savefig(filename)
             self.output(u'策略回测统计图已保存') 
         plt.show()
@@ -1248,10 +1239,11 @@ class BacktestingEngine(object):
         
         # 将成交添加到每日交易结果中
         for trade in self.tradeDict.values():
-            date = trade.dt.date()
+            date = trade.tradeDatetime.date()
             symbol = trade.vtSymbol
             dailyResult = self.dailyResultDict[symbol][date]
             dailyResult.addTrade(trade)
+            
 
         resultDf = pd.DataFrame([])
         for symbol, resultDictByDay in self.dailyResultDict.items():
@@ -1263,7 +1255,7 @@ class BacktestingEngine(object):
                 dailyResult.previousClose = previousClose
                 previousClose = dailyResult.closePrice
 
-                dailyResult.calculatePnl(openPosition, self.size, self.rate, self.slippage)
+                dailyResult.calculatePnl(openPosition, self.sizeDict[symbol], self.rateDict[symbol], self.slippageDict[symbol])
                 openPosition = dailyResult.closePosition
 
             # 生成DataFrame
@@ -1301,15 +1293,10 @@ class BacktestingEngine(object):
         endBalance = df['balance'].iloc[-1]
         maxDrawdown = df['drawdown'].min()
         maxDdPercent = df['ddPercent'].min()
-        
         totalNetPnl = df['netPnl'].sum()
-        
         totalCommission = df['commission'].sum()
-        
         totalSlippage = df['slippage'].sum()
-        
         totalTurnover = df['turnover'].sum()
-        
         totalTradeCount = df['tradeCount'].sum()
         
         totalReturn = (endBalance/self.capital - 1) * 100
@@ -1348,27 +1335,13 @@ class BacktestingEngine(object):
             'returnStd': returnStd,
             'sharpeRatio': sharpeRatio
         }
-        # d = {}
-        # d['balance'] = balanceList
-        # d['return'] = returnList
-        # d['highLevel'] = highlevelList
-        # d['drawdown'] = drawdownList
-        # d['ddPercent'] = ddPercentList
-        # d['date'] = dateList
-        # d['netPnl'] = netPnlList
 
         # 输出回测结果
         if self.logActive:
             ddresult = pd.DataFrame(result,index=[0]).T
-
-            if self.logPath:
-                save_path = os.path.join(self.logPath, self.logFolderName)
-            else:
-                save_path = os.path.join(os.getcwd(), self.logFolderName)
-
-            if not os.path.isdir(save_path):
-                os.makedirs(save_path)
-            filename = os.path.join(save_path, u"BacktestingResult-2.csv" )
+            if not os.path.isdir(self.logPath):
+                os.makedirs(self.logPath)
+            filename = os.path.join(self.logPath, u"BacktestingResult-2.csv" )
             ddresult.to_csv(filename)
             self.output(u'BacktestingResult-2已保存') 
         
@@ -1390,7 +1363,7 @@ class BacktestingEngine(object):
         self.output(u'盈利交易日\t%s' % result['profitDays'])
         self.output(u'亏损交易日：\t%s' % result['lossDays'])
         
-        self.output(u'起始资金：\t%s' % self.capital)
+        self.output(u'起始资金：\t%s' % formatNumber(self.capital))
         self.output(u'结束资金：\t%s' % formatNumber(result['endBalance']))
     
         self.output(u'总收益率：\t%s%%' % formatNumber(result['totalReturn']))
@@ -1433,26 +1406,16 @@ class BacktestingEngine(object):
         pKDE.set_title('Daily Pnl Distribution')
         df['netPnl'].hist(bins=50)
         
-        
-        
-        
         # 输出回测绩效图
         if self.logActive:
             dataframe = pd.DataFrame(self.logList)
-
-            if self.logPath:
-                save_path = os.path.join(self.logPath, self.logFolderName)
-            else:
-                save_path = os.path.join(os.getcwd(), self.logFolderName)
-
-            if not os.path.isdir(save_path):
-                os.makedirs(save_path)
-            filename = os.path.join(save_path, u"回测绩效图.png" )
+            if not os.path.isdir(self.logPath):
+                os.makedirs(self.logPath)
+            filename = os.path.join(self.logPath, u"回测绩效图.png" )
             plt.savefig(filename)
             self.output(u'策略回测绩效图已保存') 
 
         plt.show()
-       
         
 ########################################################################
 class TradingResult(object):
@@ -1540,7 +1503,6 @@ class DailyResult(object):
         # 汇总
         self.totalPnl = self.tradingPnl + self.positionPnl
         self.netPnl = self.totalPnl - self.commission - self.slippage
-
 
 ########################################################################
 class OptimizationSetting(object):
@@ -1663,17 +1625,19 @@ def formatNumber(n):
 #----------------------------------------------------------------------
 def optimize(strategyClass, setting, targetName,
              mode, startDate, initHours, endDate,
-             slippage, rate, size, priceTick,
-             dbName, symbol):
+             slippageDict, rateDict, sizeDict, priceTickDict,
+             dbName, symbolList):
     """多进程优化时跑在每个进程中运行的函数"""
     engine = BacktestingEngine()
     engine.setBacktestingMode(mode)
     engine.setStartDate(startDate, initHours)
     engine.setEndDate(endDate)
-    engine.setSlippage(slippage)
-    engine.setRate(rate)
-    engine.setSize(size)
-    engine.setPriceTick(priceTick)
+
+    engine.setSymbolList(symbolList)
+    engine.setSlippage(slippageDict.values())
+    engine.setRate(rateDict.values())
+    engine.setSize(sizeDict.values())
+    engine.setPriceTick(priceTickDict.values())
     engine.setDatabase(dbName)
     
     engine.initStrategy(strategyClass, setting)
