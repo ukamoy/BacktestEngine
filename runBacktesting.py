@@ -3,6 +3,7 @@
 展示如何执行策略回测。
 """
 from __future__ import division
+import json
 from ctaBacktesting import BacktestingEngine
 from util.ctaBase import *
 
@@ -35,7 +36,9 @@ if __name__ == '__main__':
     engine.setCachePath("D:\\backtest_data\\")        # 设置本地数据缓存的路径，默认存在用户文件夹内
     
     # 在引擎中创建策略对象，setting为策略使用的参数
-    engine.initStrategy(BollBandsStrategy, setting = {})
+    with open("./CTA_setting.json") as f:
+        setting = json.load(f)[0]
+    engine.initStrategy(BollBandsStrategy, setting)
     
     # 开始跑回测
     engine.runBacktesting()

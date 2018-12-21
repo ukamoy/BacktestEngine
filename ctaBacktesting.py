@@ -103,8 +103,8 @@ class BacktestingEngine(object):
         # 当前最新数据，用于模拟成交用
         self.tickDict = defaultdict(lambda: None)
         self.barDict = defaultdict(lambda: None)
-        self.dt = None      # 最新的时间
-        self.annualDays = 240
+        self.dt = None          # 最新的时间
+        self.annualDays = 240   # 年化的基数
         
         # 日线回测结果计算用
         self.dailyResultDict = defaultdict(OrderedDict)
@@ -172,7 +172,7 @@ class BacktestingEngine(object):
         self.capital = capital
   
     #----------------------------------------------------------------------
-    def setSlippage(self, slippage = 0):
+    def setSlippage(self, slippage = {}):
         """设置滑点点数"""
         if len(slippage) > len(self.symbolList):
             raise Exception("slippage beyond symbolList boundary")
@@ -273,105 +273,106 @@ class BacktestingEngine(object):
         start = startDate.strftime("%Y%m%d %H:%M")
         end = endDate.strftime("%Y%m%d %H:%M")
 
-        # date_list = get_date_list(start=startDate, end=endDate)    # 原版的按日回测
         datetime_list = get_time_list(start=startDate, end=endDate)
         datetime_list = [d.strftime("%Y%m%d %H:%M") for d in datetime_list]
 
         date_list = [d[:8] for d in datetime_list]
         date_list = list(set(date_list))
-        need_files = [d+".h5" for d in date_list]
+        need_files = [d + ".h5" for d in date_list]
 
-        self.output(u'载入历史数据。数据范围:[%s,%s)'%(start,end))
         # 下载数据
         dataList = []
+        no_data_days = 0
         # 优先从本地文件缓存读取数据
-        symbols_no_data = dict() #本地缓存没有的数据
+        symbols_no_data = dict()  # 本地缓存没有的数据
         for symbol in symbolList:
             symbols_no_data[symbol] = date_list.copy()
-            save_path = os.path.join(self.cachePath, self.mode, symbol.replace(":","_"))
+            save_path = os.path.join(self.cachePath, self.mode, symbol.replace(":", "_"))
             if os.path.isdir(save_path):
-                files = list(set(os.listdir(save_path)) & set(need_files)) # 加载本地文件当中有的且在下载日期范围内的数据
+                files = list(set(os.listdir(save_path)) & set(need_files))  # 加载本地文件当中有的且在下载日期范围内的数据
                 for file in files:
                     try:
                         file_path = os.path.join(save_path, file)
-                        data_df = pd.read_hdf(file_path,"d")
+                        data_df = pd.read_hdf(file_path, "d")
                     except:
                         continue
-                    
-                    dataList += [self.parseData(dataClass, item.to_dict()) for _,item in data_df[(data_df.datetime>=start) & (data_df.datetime<end)].iterrows()]                    
-                    symbols_no_data[symbol].remove(file.replace(".h5",""))
 
-        # 从mongodb下载数据，并缓存到本地
-        self.dbClient = pymongo.MongoClient(globalSetting['mongoHost'], globalSetting['mongoPort'])
-        try:            
-            for symbol in symbolList:
-                if symbol in self.dbClient[self.dbName].collection_names():
+                    dataList += [self.parseData(dataClass, item) for item in
+                                 data_df[(data_df.datetime >= start) & (data_df.datetime < end)].to_dict("record")]
 
-                    if len(symbols_no_data[symbol])>0:
-                        
-                        collection = self.dbClient[self.dbName][symbol]
-                        Cursor = collection.find({"date": {"$in":symbols_no_data[symbol]}})   # 按日回测检索
-                        data_df = pd.DataFrame(list(Cursor))
-                        if data_df.size > 0:
-                            del data_df["_id"]
+                    symbols_no_data[symbol].remove(file.replace(".h5", ""))
+            no_data_days += len(symbols_no_data[symbol])
 
-                        # 筛选出需要的时间段
-                        dataList += [self.parseData(dataClass, item.to_dict()) for _,item in data_df[(data_df.datetime>=start) & (data_df.datetime<end)].iterrows()]
-
-                        # 缓存到本地文件
-                        if data_df.size>0:
-                            save_path = os.path.join(self.cachePath, self.mode, symbol.replace(":","_"))
-                            if not os.path.isdir(save_path):
-                                os.makedirs(save_path)
-                            for date in symbols_no_data[symbol]:
-                                file_data = data_df[data_df["date"]==date]
-                                if file_data.size>0:
-                                    file_path = os.path.join(save_path, "%s.h5" % (date,))
-                                    file_data.to_hdf(file_path, key="d")
-                    else:
-                        self.output(" 当前品种 %s 的数据，全部来自于本地缓存"%symbol)
-
-                else:
-                    self.output("我们的数据库没有 %s 这个品种"%symbol)
-                    self.output("这些品种在我们的数据库里: %s"%self.dbClient[self.dbName].collection_names())
-        except:
-            self.output('WARNING, 请注意数据量')
+        # 如果没有完全从本地文件加载完数据,则从mongodb下载数据，并缓存到本地
+        if no_data_days > 0:
+            try:
+                self.dbClient = pymongo.MongoClient(globalSetting['mongoHost'], globalSetting['mongoPort'])
+                for symbol in symbolList:
+                    if len(symbols_no_data[symbol]) > 0:  # 需要从数据库取数据
+                        if symbol in self.dbClient[self.dbName].collection_names():
+                            collection = self.dbClient[self.dbName][symbol]
+                            Cursor = collection.find({"date": {"$in": symbols_no_data[symbol]}})  # 按日回测检索
+                            data_df = pd.DataFrame(list(Cursor))
+                            if data_df.size > 0:
+                                del data_df["_id"]
+                                # 筛选出需要的时间段
+                                dataList += [self.parseData(dataClass, item) for item in
+                                             data_df[(data_df.datetime >= start) & (data_df.datetime < end)].to_dict(
+                                                 "record")]
+                                # 缓存到本地文件
+                                if data_df.size > 0:
+                                    save_path = os.path.join(self.cachePath, self.mode, symbol.replace(":", "_"))
+                                    if not os.path.isdir(save_path):
+                                        os.makedirs(save_path)
+                                    date_today = datetime.now().strftime("%Y%m%d")
+                                    for date in symbols_no_data[symbol]:
+                                        if date != date_today:  # 当日数据不缓存到本地，防止本地缓存出现数据不全的情况
+                                            file_data = data_df[data_df["date"] == date]
+                                            if file_data.size > 0:
+                                                file_path = os.path.join(save_path, "%s.h5" % (date,))
+                                                file_data.to_hdf(file_path, key="d")
+                        else:
+                            self.output("我们的数据库没有 %s 这个品种" % symbol)
+                            self.output("这些品种在我们的数据库里: %s" % self.dbClient[self.dbName].collection_names())
+            except:
+                self.output('MongoDB无法连接,当前仅使用本地缓存数据, 请注意数据量。')
+                import traceback
+                traceback.print_exc()
 
         if len(dataList) > 0:
-            dataList.sort(key=lambda x: (x.datetime))
-            self.output(u'载入结束，数据量：%s' %(len(dataList)))
+            dataList.sort(key=lambda x: x.datetime)
+            self.output(u'数据载入完成, 时间段:[%s,%s);数据量:%s' % (start, end, len(dataList)))
             return dataList
         else:
-            self.output(u'WARNING: 该选取时间段数据量为 0 ！')
+            self.output(u'WARNING: 该时间段:[%s,%s) 数据量为0!' % (start, end))
             return []
-        
-    #----------------------------------------------------------------------
+
+    # ----------------------------------------------------------------------
     def runBacktesting(self):
         """运行回测"""
+
         dataLimit = 1000000
         self.clearBacktestingResult()  # 清空策略的所有状态（指如果多次运行同一个策略产生的状态）
         # 首先根据回测模式，确认要使用的数据类,以及数据的分批回放范围
         if self.mode == self.BAR_MODE:
             func = self.newBar
-            dataDays = max(dataLimit//(len(self.strategy.symbolList) * 24 * 60),1)
+            dataDays = max(dataLimit // (len(self.strategy.symbolList) * 24 * 60), 1)
         else:
             func = self.newTick
-            dataDays = max(dataLimit//(len(self.strategy.symbolList) * 24 * 60 * 60 * 5),1)
+            dataDays = max(dataLimit // (len(self.strategy.symbolList) * 24 * 60 * 60 * 5), 1)
 
         self.output(u'开始回测')
 
-        self.initData = [] # 清空内存里的数据
-        self.backtestData = [] # 清空内存里的数据
+        self.initData = []  # 清空内存里的数据
+        self.backtestData = []  # 清空内存里的数据
         # 策略初始化
         self.output(u'策略初始化')
         # 加载初始化数据.数据范围:[self.strategyStartDate,self.dataStartDate)
-        if self.strategyStartDate == self.dataStartDate:
-            self.output(u'策略无请求历史数据初始化')
-        else:
-            self.initData = self.loadHistoryData(self.strategy.symbolList,self.strategyStartDate,self.dataStartDate)
+        if self.strategyStartDate != self.dataStartDate:
+            self.initData = self.loadHistoryData(self.strategy.symbolList, self.strategyStartDate, self.dataStartDate)
+            self.output(u'初始化预加载数据成功, 数据长度:%s' % (len(self.initData)))
         self.strategy.inited = True
         self.strategy.onInit()
-        self.strategy.inited = True
         self.output(u'策略初始化完成')
 
         self.strategy.trading = True
@@ -381,33 +382,31 @@ class BacktestingEngine(object):
         # 分批加载回测数据.数据范围:[self.dataStartDate,self.dataEndDate+1)
         begin = start = self.dataStartDate
         stop = self.dataEndDate
-        # stop = self.dataEndDate+timedelta(1)
-        self.output(u'开始回放回测数据,回测范围:[%s,%s)'%(begin.strftime("%Y%m%d %H:%M"),stop.strftime("%Y%m%d %H:%M")))
-        while start<stop:
+        self.output(u'回测时间范围:[%s,%s)' % (begin.strftime("%Y%m%d %H:%M"), stop.strftime("%Y%m%d %H:%M")))
+        while start < stop:
             end = min(start + timedelta(dataDays), stop)
-            self.backtestData = self.loadHistoryData(self.strategy.symbolList,start,end)
-            if len(self.backtestData)==0:
+            self.output(u'当前回放的时间段:[%s,%s)' % (start.strftime("%Y%m%d %H:%M"), end.strftime("%Y%m%d %H:%M")))
+            self.backtestData = self.loadHistoryData(self.strategy.symbolList, start, end)
+            if len(self.backtestData) == 0:
                 break
             else:
-                self.output(u'当前回放数据:[%s,%s)'%(start.strftime("%Y%m%d %H:%M"),end.strftime("%Y%m%d %H:%M")))
                 oneP = int(len(self.backtestData) / 100)
-
                 for idx, data in enumerate(self.backtestData):
                     if idx % oneP == 0:
                         self.output('Progress: %s%%' % str(int(idx / oneP)), True)
                     func(data)
                 start = end
 
-        self.output(u'数据回放结束\n')
+        self.output(u'回放结束')
 
         # 日志输出模块
         if self.logActive:
             dataframe = pd.DataFrame(self.logList)
             if not os.path.isdir(self.logPath):
                 os.makedirs(self.logPath)
-            filename = os.path.join(self.logPath, u"trading_log.csv" )
-            dataframe.to_csv(filename,index=False,sep=',',encoding="utf_8_sig")  
-            self.output(u'策略日志已生成') 
+            filename = os.path.join(self.logPath, u"trading_result.csv")
+            dataframe.to_csv(filename, index=False, sep=',', encoding="utf_8_sig")
+            self.output(u'策略日志已生成')
         
     #----------------------------------------------------------------------
     def newBar(self, bar):
@@ -440,8 +439,10 @@ class BacktestingEngine(object):
         setting是策略的参数设置，如果使用类中写好的默认设置则可以不传该参数
         """
         self.strategy = strategyClass(self, setting)
-        self.strategy.name = self.strategy.className
-        self.strategy.symbolList = self.symbolList
+        for key, value in setting:
+            setattr(self.strategy,key,value)
+        # self.strategy.name = self.strategy.className
+        # self.strategy.symbolList = self.symbolList
         self.initPosition(self.strategy)
 
     #----------------------------------------------------------------------
@@ -498,17 +499,25 @@ class BacktestingEngine(object):
                     # 3. 则在实际中的成交价会是100而不是105，因为委托发出时市场的最优价格是100
                     if buyCross and trade.offset == OFFSET_OPEN:
                         trade.price = min(order.price, buyBestCrossPrice)
-                        self.strategy.posDict[symbol+"_LONG"] += order.totalVolume
-                        self.strategy.eveningDict[symbol+"_LONG"] += order.totalVolume
+                        self.strategy.posDict[symbol + "_LONG"] += order.totalVolume
+                        self.strategy.eveningDict[symbol + "_LONG"] += order.totalVolume
                     elif buyCross and trade.offset == OFFSET_CLOSE:
                         trade.price = min(order.price, buyBestCrossPrice)
                         self.strategy.posDict[symbol+"_SHORT"] -= order.totalVolume
-                        self.strategy.eveningDict[symbol+"_SHORT"] -= order.totalVolume
                     elif sellCross and trade.offset == OFFSET_OPEN:
                         trade.price = max(order.price, sellBestCrossPrice)
-                        self.strategy.posDict[symbol+"_SHORT"] += order.totalVolume
-                        self.strategy.eveningDict[symbol+"_SHORT"] += order.totalVolume
+                        self.strategy.posDict[symbol + "_SHORT"] += order.totalVolume
+                        self.strategy.eveningDict[symbol + "_SHORT"] += order.totalVolume
                     elif sellCross and trade.offset == OFFSET_CLOSE:
+                        trade.price = max(order.price, sellBestCrossPrice)
+                        self.strategy.posDict[symbol+"_LONG"] -= order.totalVolume
+
+                    # 现货仓位
+                    elif buyCross and trade.offset == OFFSET_NONE:
+                        trade.price = min(order.price, buyBestCrossPrice)
+                        self.strategy.posDict[symbol+"_LONG"] += order.totalVolume
+                        self.strategy.eveningDict[symbol+"_LONG"] += order.totalVolume
+                    elif sellCross and trade.offset == OFFSET_NONE:
                         trade.price = max(order.price, sellBestCrossPrice)
                         self.strategy.posDict[symbol+"_LONG"] -= order.totalVolume
                         self.strategy.eveningDict[symbol+"_LONG"] -= order.totalVolume
@@ -641,23 +650,27 @@ class BacktestingEngine(object):
         elif orderType == CTAORDER_SELL:
             order.direction = DIRECTION_SHORT
             order.offset = OFFSET_CLOSE
-            if order.totalVolume > self.strategy.posDict[order.vtSymbol+'_LONG']:
+            if order.totalVolume > self.strategy.eveningDict[order.vtSymbol + '_LONG']:
                 raise Exception('***平仓数量大于可平量，请检查策略逻辑***')
+            else:
+                self.strategy.eveningDict[order.vtSymbol+'_LONG'] -= order.totalVolume
         elif orderType == CTAORDER_SHORT:
             order.direction = DIRECTION_SHORT
             order.offset = OFFSET_OPEN
         elif orderType == CTAORDER_COVER:
             order.direction = DIRECTION_LONG
-            order.offset = OFFSET_CLOSE  
-            if order.totalVolume > self.strategy.posDict[order.vtSymbol+'_SHORT']:
+            order.offset = OFFSET_CLOSE
+            if order.totalVolume > self.strategy.eveningDict[order.vtSymbol + '_SHORT']:
                 raise Exception('***平仓数量大于可平量，请检查策略逻辑***')
+            else:
+                self.strategy.eveningDict[order.vtSymbol+'_SHORT'] -= order.totalVolume
 
         if priceType == PRICETYPE_LIMITPRICE:
-            order.price = self.roundToPriceTick(vtSymbol,price)
+            order.price = self.roundToPriceTick(price)
         elif priceType == PRICETYPE_MARKETPRICE and order.direction == DIRECTION_LONG:
-            order.price = self.roundToPriceTick(vtSymbol,price) * 1000
+            order.price = self.roundToPriceTick(price * 1000)
         elif priceType == PRICETYPE_MARKETPRICE and order.direction == DIRECTION_SHORT:
-            order.price = self.roundToPriceTick(vtSymbol,price) / 1000
+            order.price = self.roundToPriceTick(price / 1000)
 
         # 保存到限价单字典中
         self.workingLimitOrderDict[orderID] = order
@@ -674,6 +687,12 @@ class BacktestingEngine(object):
             order.status = STATUS_CANCELLED
             order.cancelTime = self.dt.strftime('%Y%m%d %H:%M:%S')
             order.cancelDatetime = self.dt
+            if order.offset == OFFSET_CLOSE:
+                if order.direction == DIRECTION_LONG:
+                    self.strategy.eveningDict[order.vtSymbol + '_SHORT'] += order.totalVolume
+            else:
+                if order.direction == DIRECTION_SHORT:
+                    self.strategy.eveningDict[order.vtSymbol + '_LONG'] += order.totalVolume
             
             self.strategy.onOrder(order)
             
@@ -775,9 +794,9 @@ class BacktestingEngine(object):
         pass
     
     #----------------------------------------------------------------------
-    def getPriceTick(self, strategy):
+    def getPriceTick(self, symbol, strategy):
         """获取最小价格变动"""
-        return self.priceTick
+        return self.priceTickDict[symbol]
     
     #-------------------------------------------
     def initPosition(self,strategy):
@@ -1091,7 +1110,6 @@ class BacktestingEngine(object):
         
         # 输出回测统计图
         if self.logActive:
-            dataframe = pd.DataFrame(self.logList)
             if not os.path.isdir(self.logPath):
                 os.makedirs(self.logPath)
             filename = os.path.join(self.logPath, u"回测统计图.png" )
