@@ -26,7 +26,6 @@ try:
 except ImportError:
     pass
 
-from util.vtGlobal import globalSetting
 from util.vtObject import *
 from util.vtConstant import *
 
@@ -76,6 +75,8 @@ class BacktestingEngine(object):
         self.hdsClient = None       # 历史数据服务器客户端
         
         self.initData = []          # 初始化用的数据
+        self.host = ''
+        self.port = 0
         self.dbName = ''            # 回测数据库名
         self.symbol = ''            # 回测集合名
         self.backtestData = []      # 回测用历史数据
@@ -165,6 +166,10 @@ class BacktestingEngine(object):
     def setDatabase(self, dbName):
         """设置历史数据所用的数据库"""
         self.dbName = dbName
+
+    def setDBConnect(self,host,port = 27017):
+        self.host = host
+        self.port = port
     
     #----------------------------------------------------------------------
     def setCapital(self, capital):
@@ -306,7 +311,7 @@ class BacktestingEngine(object):
         # 如果没有完全从本地文件加载完数据,则从mongodb下载数据，并缓存到本地
         if no_data_days > 0:
             try:
-                self.dbClient = pymongo.MongoClient(globalSetting['mongoHost'], globalSetting['mongoPort'])
+                self.dbClient = pymongo.MongoClient(self.host,self.port)
                 for symbol in symbolList:
                     if len(symbols_no_data[symbol]) > 0:  # 需要从数据库取数据
                         if symbol in self.dbClient[self.dbName].collection_names():
@@ -317,8 +322,8 @@ class BacktestingEngine(object):
                                 del data_df["_id"]
                                 # 筛选出需要的时间段
                                 dataList += [self.parseData(dataClass, item) for item in
-                                             data_df[(data_df.datetime >= start) & (data_df.datetime < end)].to_dict(
-                                                 "record")]
+                                            data_df[(data_df.datetime >= start) & (data_df.datetime < end)].to_dict(
+                                                "record")]
                                 # 缓存到本地文件
                                 if data_df.size > 0:
                                     save_path = os.path.join(self.cachePath, self.mode, symbol.replace(":", "_"))
@@ -1573,8 +1578,7 @@ class HistoryDataServer(RpcServer):
         """Constructor"""
         super(HistoryDataServer, self).__init__(repAddress, pubAddress)
         
-        self.dbClient = pymongo.MongoClient(globalSetting['mongoHost'], 
-                                            globalSetting['mongoPort'])
+        self.dbClient = pymongo.MongoClient(BacktestingEngine.host, BacktestingEngine.port)
         
         self.historyDict = {}
         

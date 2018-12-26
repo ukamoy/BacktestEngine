@@ -16,6 +16,7 @@ if __name__ == '__main__':
     # 设置引擎的回测模式为K线
     engine.setBacktestingMode(engine.BAR_MODE)
     # 设置使用的历史数据库
+    engine.setDBConnect('localhost',27017)
     engine.setDatabase('VnTrader_1Min_Db')
 
     # 设置回测用的数据起始日期，initHours 默认值为 0
@@ -41,7 +42,7 @@ if __name__ == '__main__':
     engine.initStrategy(BollBandsStrategy, setting)
     
     # 开始跑回测
-    engine.runBacktesting()
+    engine.runBacktesting(source = "csv")
 
     # 显示回测结果
     engine.showBacktestingResult()
