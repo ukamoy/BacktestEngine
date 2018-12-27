@@ -4,7 +4,11 @@ import os
 
 def save_hdf(symbol,csv_file,sheetname = ""):
     data_df = pd.read_csv(csv_file) 
-    data_df['date'] = data_df['datetime'].apply(lambda x : datetime.strptime(x,"%Y-%m-%d %H:%M:%S").strftime("%Y%m%d"))
+    data_df['datetime'] = data_df['datetime'].apply(lambda x : datetime.strptime(x,"%Y%m%d %H:%M:%S"))
+    data_df['date'] = data_df['datetime'].apply(lambda x : x.strftime("%Y%m%d"))
+    data_df['time'] = data_df['datetime'].apply(lambda x : x.strftime("%H:%M:%S"))
+    data_df['vtSymbol'] = symbol
+    
     date = set(data_df['date'])
     print(date)
 
@@ -19,4 +23,4 @@ def save_hdf(symbol,csv_file,sheetname = ""):
                 file_data.to_hdf(file_path, key="d")
 
 if __name__ == '__main__':
-    save_hdf('rb88', "a.csv")
+    save_hdf('rb:SHF', "rb88-2010-2018.csv")
