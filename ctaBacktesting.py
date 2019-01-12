@@ -1,5 +1,4 @@
 # encoding: UTF-8
-
 '''
 本文件中包含的是CTA模块的回测引擎，回测引擎的API和CTA引擎一致，
 可以使用和实盘相同的代码进行回测。
@@ -17,8 +16,8 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from rpc import RpcClient, RpcServer, RemoteException
-# 如果安装了seaborn则设置为白色风格
+# from rpc import RpcClient, RpcServer, RemoteException
+# 如果安装了 seaborn 则设置为白色风格
 try:
     import seaborn as sns       
     sns.set_style('whitegrid')  
@@ -27,7 +26,6 @@ except ImportError:
 
 from util.vtObject import *
 from util.vtConstant import *
-
 from util.ctaBase import *
 
 ########################################################################
@@ -247,13 +245,13 @@ class BacktestingEngine(object):
         'symbol': 'tBTCUSD', 'time': '10:44:00.000000', 'volume': 12.18062789, 'vtSymbol': 'tBTCUSD:bitfinex'}
         """
     #----------------------------------------------------------------------
-    def initHdsClient(self):
-        """初始化历史数据服务器客户端"""
-        reqAddress = 'tcp://localhost:5555'
-        subAddress = 'tcp://localhost:7777'   
+    # def initHdsClient(self):
+    #     """初始化历史数据服务器客户端"""
+    #     reqAddress = 'tcp://localhost:5555'
+    #     subAddress = 'tcp://localhost:7777'   
         
-        self.hdsClient = RpcClient(reqAddress, subAddress)
-        self.hdsClient.start()    
+    #     self.hdsClient = RpcClient(reqAddress, subAddress)
+    #     self.hdsClient.start()    
 
     #----------------------------------------------------------------------
     def loadHistoryData(self, symbolList, startDate, endDate=None):
@@ -347,7 +345,6 @@ class BacktestingEngine(object):
     # ----------------------------------------------------------------------
     def runBacktesting(self):
         """运行回测"""
-
         dataLimit = 1000000
         self.clearBacktestingResult()  # 清空策略的所有状态（指如果多次运行同一个策略产生的状态）
         # 首先根据回测模式，确认要使用的数据类,以及数据的分批回放范围
@@ -838,9 +835,6 @@ class BacktestingEngine(object):
     # 结果计算相关
     #------------------------------------------------------------------------      
     def calculateBacktestingResult(self):
-        """
-        计算回测结果
-        """
         self.output(u'计算回测结果')
                 
         # 检查成交记录
@@ -1501,7 +1495,6 @@ class BacktestingEngine(object):
 ########################################################################
 class TradingResult(object):
     """每笔交易的结果"""
-
     # ----------------------------------------------------------------------
     def __init__(self, entryPrice, entryDt, entryID, exitPrice, 
                  exitDt, exitID, volume, rate, slippage, size):
@@ -1525,11 +1518,9 @@ class TradingResult(object):
         self.pnl = ((self.exitPrice - self.entryPrice) * volume * size
                     - self.commission - self.slippage)  # 净盈亏
         
-
 ########################################################################
 class DailyResult(object):
     """每日交易的结果"""
-
     #----------------------------------------------------------------------
     def __init__(self, symbol, date, closePrice):
         """Constructor"""
@@ -1649,56 +1640,56 @@ class OptimizationSetting(object):
         self.optimizeTarget = target
 
 ########################################################################
-class HistoryDataServer(RpcServer):
-    """历史数据缓存服务器"""
+# class HistoryDataServer(RpcServer):
+#     """历史数据缓存服务器"""
 
-    #----------------------------------------------------------------------
-    def __init__(self, repAddress, pubAddress):
-        """Constructor"""
-        super(HistoryDataServer, self).__init__(repAddress, pubAddress)
+#     #----------------------------------------------------------------------
+#     def __init__(self, repAddress, pubAddress):
+#         """Constructor"""
+#         super(HistoryDataServer, self).__init__(repAddress, pubAddress)
         
-        self.dbClient = pymongo.MongoClient(BacktestingEngine.uri)
+#         self.dbClient = pymongo.MongoClient(BacktestingEngine.uri)
         
-        self.historyDict = {}
+#         self.historyDict = {}
         
-        self.register(self.loadHistoryData)
+#         self.register(self.loadHistoryData)
     
-    #----------------------------------------------------------------------
-    def loadHistoryData(self, dbName, symbol, start, end):
-        """"""
-        # 首先检查是否有缓存，如果有则直接返回
-        history = self.historyDict.get((dbName, symbol, start, end), None)
-        if history:
-            print(u'找到内存缓存：%s %s %s %s' %(dbName, symbol, start, end))
-            return history
+#     #----------------------------------------------------------------------
+#     def loadHistoryData(self, dbName, symbol, start, end):
+#         """"""
+#         # 首先检查是否有缓存，如果有则直接返回
+#         history = self.historyDict.get((dbName, symbol, start, end), None)
+#         if history:
+#             print(u'找到内存缓存：%s %s %s %s' %(dbName, symbol, start, end))
+#             return history
         
-        # 否则从数据库加载
-        collection = self.dbClient[dbName][symbol]
+#         # 否则从数据库加载
+#         collection = self.dbClient[dbName][symbol]
         
-        if end:
-            flt = {'datetime':{'$gte':start, '$lt':end}}        
-        else:
-            flt = {'datetime':{'$gte':start}}        
+#         if end:
+#             flt = {'datetime':{'$gte':start, '$lt':end}}        
+#         else:
+#             flt = {'datetime':{'$gte':start}}        
             
-        cx = collection.find(flt).sort('datetime')
-        history = [d for d in cx]
+#         cx = collection.find(flt).sort('datetime')
+#         history = [d for d in cx]
         
-        self.historyDict[(dbName, symbol, start, end)] = history
-        print(u'从数据库加载：%s %s %s %s' %(dbName, symbol, start, end))
-        return history
+#         self.historyDict[(dbName, symbol, start, end)] = history
+#         print(u'从数据库加载：%s %s %s %s' %(dbName, symbol, start, end))
+#         return history
     
-#----------------------------------------------------------------------
-def runHistoryDataServer():
-    """"""
-    repAddress = 'tcp://*:5555'
-    pubAddress = 'tcp://*:7777'
+# #----------------------------------------------------------------------
+# def runHistoryDataServer():
+#     """"""
+#     repAddress = 'tcp://*:5555'
+#     pubAddress = 'tcp://*:7777'
 
-    hds = HistoryDataServer(repAddress, pubAddress)
-    hds.start()
+#     hds = HistoryDataServer(repAddress, pubAddress)
+#     hds.start()
 
-    print(u'按任意键退出')
-    hds.stop()
-    raw_input()
+#     print(u'按任意键退出')
+#     hds.stop()
+#     raw_input()
 
 #----------------------------------------------------------------------
 def formatNumber(n):

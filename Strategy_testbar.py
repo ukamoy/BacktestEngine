@@ -9,10 +9,6 @@ import numpy as np
 from datetime import time,datetime
 ########################################################################
 class BarStrategy(CtaTemplate):
-    className = 'BarStrategy'
-    author = 'xingetouzi'
-    version = '1.1.11'
-
     # 策略参数
     size = 800
     transactionPrice = {}
@@ -27,8 +23,7 @@ class BarStrategy(CtaTemplate):
                'transactionPrice']
 
     # 同步列表，保存了需要保存到数据库的变量名称
-    syncList = ['posDict','eveningDict',
-               'transactionPrice']
+    syncList = ['posDict','eveningDict']
     #----------------------------------------------------------------------
     def __init__(self, ctaEngine, setting):
         super(BarStrategy, self).__init__(ctaEngine, setting)
